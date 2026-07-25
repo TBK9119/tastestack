@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Users ----------
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  username     String   @unique
+  displayName  String
+  bio          String   @default("")
+  avatarUrl    String   @default("")
+  bannerColor  String   @default("#2e51a2")
+  isPublic     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  items      Item[]
+  activities Activity[]
+  followers  Follow[]  @relation("Following")
+  following  Follow[]  @relation("Follower")
+  sessions   Session[]
+  accounts   Account[]
+
+  @@map("users")
+}
+
+// ---------- Media items ----------
+model Item {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            String   // anime, manga, movie, tv, game, album, book
+  apiId           String   // ID from source API
+  source          String   // anilist, tmdb, rawg, lastfm, openlibrary
+  title           String
+  coverUrl        String   @default("")
+  year            String   @default("")
+  extra           String   @default("{}") // JSON: genres, creator, accent, cover
+  status          String   @default("planned") // watching, completed, planned, dropped, onhold
+  rating          Int      @default(0) // 0=unrated, 1-10
+  progressCurrent Int      @default(0)
+  progressTotal   Int      @default(0)
+  review          String   @default("")
+  isFavorite      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  activities Activity[]
+
+  @@unique([userId, type, apiId, source])
+  @@index([userId, type, status])
+  @@map("items")
+}
+
+// ---------- Social: follow graph ----------
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+// ---------- Activity feed ----------
+model Activity {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId    String?
+  item      Item?    @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  action    String   // added, rated, completed, favorited, reviewed
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("activities")
+}
+
+// ---------- NextAuth tables ----------
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires      DateTime
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}

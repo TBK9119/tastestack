@@ -1,0 +1,31 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { db } from "@/lib/db";
+
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return NextResponse.json({ error: "Please log in first." }, { status: 401 });
+
+  const user = await db.user.findUnique({ where: { id: session.user.id }, select: { displayName: true, bio: true, avatarUrl: true, bannerColor: true, isPublic: true, username: true } });
+  if (!user) return NextResponse.json({ error: "User not found." }, { status: 404 });
+  return NextResponse.json(user);
+}
+
+export async function PATCH(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return NextResponse.json({ error: "Please log in first." }, { status: 401 });
+
+  const body = await request.json();
+  const data: Record<string, any> = {};
+  if (typeof body.displayName === "string") data.displayName = body.displayName.trim().slice(0, 40);
+  if (typeof body.bio === "string") data.bio = body.bio.trim().slice(0, 240);
+  if (typeof body.bannerColor === "string") data.bannerColor = body.bannerColor;
+  if (typeof body.isPublic === "boolean") data.isPublic = body.isPublic;
+
+  const updated = await db.user.update({ where: { id: session.user.id }, data });
+  return NextResponse.json({
+    displayName: updated.displayName, bio: updated.bio, avatarUrl: updated.avatarUrl,
+    bannerColor: updated.bannerColor, isPublic: updated.isPublic, username: updated.username,
+  });
+}
