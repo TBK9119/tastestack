@@ -1,7 +1,0 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/db";
-
-export async function GET() { const session = await getServerSession(authOptions); if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { displayName: true, username: true, bio: true, bannerColor: true, isPublic: true } }); return NextResponse.json(user); }
-export async function PATCH(request: NextRequest) { const session = await getServerSession(authOptions); if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); const body = await request.json() as { displayName?: string; bio?: string; bannerColor?: string; isPublic?: boolean }; const displayName = body.displayName?.trim(); if (!displayName || displayName.length > 40) return NextResponse.json({ error: "Display name must be 1–40 characters." }, { status: 400 }); const user = await prisma.user.update({ where: { id: session.user.id }, data: { displayName, bio: (body.bio || "").slice(0, 240), bannerColor: /^#[0-9a-f]{6}$/i.test(body.bannerColor || "") ? body.bannerColor : "#2e51a2", isPublic: Boolean(body.isPublic) }, select: { displayName: true, bio: true, bannerColor: true, isPublic: true } }); return NextResponse.json(user); }
