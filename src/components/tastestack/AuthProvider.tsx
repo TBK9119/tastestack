@@ -8,7 +8,7 @@ export const SESSION_STATUS = { current: "loading" as string };
 
 export function AuthProviderInner({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
-  const { setUser, setLoading } = useAppStore();
+  const { setUser, setLoading, view, setView } = useAppStore();
 
   useEffect(() => {
     SESSION_STATUS.current = status;
@@ -20,11 +20,12 @@ export function AuthProviderInner({ children }: { children: React.ReactNode }) {
         displayName: session.user.displayName,
         avatarUrl: session.user.avatarUrl,
       });
+      if (view === "landing") setView("discover");
     } else if (status === "unauthenticated") {
       setUser(null);
     }
     if (status !== "loading") setLoading(false);
-  }, [session, status, setUser, setLoading]);
+  }, [session, status, setUser, setLoading, view, setView]);
 
   return <>{children}</>;
 }

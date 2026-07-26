@@ -20,7 +20,7 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
       <nav className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-6">
-        <button onClick={() => setView("landing")} className="text-xl font-extrabold tracking-tight text-primary">
+        <button onClick={() => setView(session ? "discover" : "landing")} className="text-xl font-extrabold tracking-tight text-primary">
           Taste<span className="text-foreground">Stack</span>
         </button>
 
