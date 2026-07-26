@@ -54,12 +54,12 @@ export default function SignupPage() {
               <Label htmlFor="username">Username (your profile URL)</Label>
               <div className="flex">
                 <span className="px-3 py-2 bg-muted border border-r-0 border-input rounded-l-md text-sm text-muted-foreground">/u/</span>
-                <Input id="username" type="text" required pattern="[a-zA-Z0-9_]{3,20}" title="3-20 chars: letters, numbers, underscore" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="thava" className="rounded-l-none" />
+                <Input id="username" type="text" required pattern="[a-zA-Z0-9_]{3,20}" title="3-20 chars: letters, numbers, underscore" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="yourusername" className="rounded-l-none" />
               </div>
             </div>
             <div>
               <Label htmlFor="displayName">Display name</Label>
-              <Input id="displayName" type="text" required value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} placeholder="Thava" />
+              <Input id="displayName" type="text" required value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} placeholder="Your Name" />
             </div>
             <div>
               <Label htmlFor="password">Password</Label>
