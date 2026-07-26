@@ -38,22 +38,27 @@ export default function DiscoverPage() {
       .catch(() => {});
   }, []);
 
+  const TRENDING_TYPES = ["anime", "manga"];
   const isLiveTab = type !== "all" && liveTypes.includes(type);
-  const useLive = isLiveTab && query.trim().length > 0;
+  const hasQuery = query.trim().length > 0;
+  const useLive = isLiveTab && (hasQuery || TRENDING_TYPES.includes(type));
 
   useEffect(() => {
     if (!useLive) { setLiveResults([]); setSearching(false); return; }
     setSearching(true);
     const handle = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?type=${type}&q=${encodeURIComponent(query)}`);
+        const url = hasQuery
+          ? `/api/search?type=${type}&q=${encodeURIComponent(query)}`
+          : `/api/trending?type=${type}`;
+        const res = await fetch(url);
         const data = await res.json();
         setLiveResults(Array.isArray(data.results) ? data.results : []);
       } catch { setLiveResults([]); }
       finally { setSearching(false); }
-    }, 400);
+    }, hasQuery ? 400 : 0);
     return () => clearTimeout(handle);
-  }, [type, query, useLive]);
+  }, [type, query, useLive, hasQuery]);
 
   const catalogCards: Card[] = useMemo(
     () => CATALOG.filter((item) => (type === "all" || item.type === type) && `${item.title} ${item.creator}`.toLowerCase().includes(query.toLowerCase()))
