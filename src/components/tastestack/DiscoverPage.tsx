@@ -18,13 +18,19 @@ type Card = {
 };
 
 const TABS: Array<"all" | MediaType> = ["all", "anime", "manga", "movie", "tv", "game", "album", "book"];
+const TRENDING_TYPES = ["anime", "manga"];
+const SORT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "trending", label: "Trending" },
+  { value: "popular", label: "Most popular" },
+  { value: "top", label: "Top rated" },
+];
 
 export default function DiscoverPage() {
   const { data: session } = useSession();
   const { setView, user } = useAppStore();
   const [type, setType] = useState<"all" | MediaType>("all");
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("planned");
+  const [sort, setSort] = useState("trending");
   const [adding, setAdding] = useState<string | null>(null);
   const [liveResults, setLiveResults] = useState<NormalizedResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -38,19 +44,21 @@ export default function DiscoverPage() {
       .catch(() => {});
   }, []);
 
-  const TRENDING_TYPES = ["anime", "manga"];
   const isLiveTab = type !== "all" && liveTypes.includes(type);
   const hasQuery = query.trim().length > 0;
-  const useLive = isLiveTab && (hasQuery || TRENDING_TYPES.includes(type));
+  const showTrendingSort = TRENDING_TYPES.includes(type) && !hasQuery;
+  const useLive = (isLiveTab && (hasQuery || TRENDING_TYPES.includes(type))) || (type === "all" && hasQuery);
 
   useEffect(() => {
     if (!useLive) { setLiveResults([]); setSearching(false); return; }
     setSearching(true);
     const handle = setTimeout(async () => {
       try {
-        const url = hasQuery
-          ? `/api/search?type=${type}&q=${encodeURIComponent(query)}`
-          : `/api/trending?type=${type}`;
+        const url = type === "all"
+          ? `/api/search?type=all&q=${encodeURIComponent(query)}`
+          : hasQuery
+            ? `/api/search?type=${type}&q=${encodeURIComponent(query)}`
+            : `/api/trending?type=${type}&sort=${sort}`;
         const res = await fetch(url);
         const data = await res.json();
         setLiveResults(Array.isArray(data.results) ? data.results : []);
@@ -58,7 +66,7 @@ export default function DiscoverPage() {
       finally { setSearching(false); }
     }, hasQuery ? 400 : 0);
     return () => clearTimeout(handle);
-  }, [type, query, useLive, hasQuery]);
+  }, [type, query, useLive, hasQuery, sort]);
 
   const catalogCards: Card[] = useMemo(
     () => CATALOG.filter((item) => (type === "all" || item.type === type) && `${item.title} ${item.creator}`.toLowerCase().includes(query.toLowerCase()))
@@ -66,33 +74,42 @@ export default function DiscoverPage() {
     [type, query]
   );
 
+  // On the All tab, fill in titles the live search can't reach yet (movies,
+  // TV, games, and music without an API key configured) from the curated
+  // catalog, so a search still surfaces something for those categories.
+  const catalogFallbackCards: Card[] = useMemo(() => {
+    if (type !== "all" || !hasQuery) return [];
+    return CATALOG.filter((item) => !liveTypes.includes(item.type) && `${item.title} ${item.creator}`.toLowerCase().includes(query.toLowerCase()))
+      .map((item) => ({ key: `catalog-${item.apiId}`, type: item.type, apiId: item.apiId, title: item.title, creator: item.creator, year: item.year, progressTotal: item.progressTotal, description: item.description, cover: item.cover, accent: item.accent }));
+  }, [type, hasQuery, query, liveTypes]);
+
   const liveCards: Card[] = liveResults.map((r) => ({ key: `${r.source}-${r.apiId}`, type: r.type, apiId: r.apiId, source: r.source, title: r.title, creator: r.creator, year: r.year, progressTotal: r.progressTotal, description: r.description, coverUrl: r.coverUrl }));
 
-  const cards = useLive ? liveCards : catalogCards;
+  const cards = useLive ? [...liveCards, ...catalogFallbackCards] : catalogCards;
   const keyGated = type !== "all" && !liveTypes.includes(type) && query.trim().length > 0;
 
   const add = useCallback(async (card: Card, favorite = false) => {
     if (!session) { setView("login"); return; }
     setAdding(`${card.apiId}-${favorite}`);
     const payload = card.source
-      ? { type: card.type, apiId: card.apiId, source: card.source, title: card.title, creator: card.creator, year: card.year, coverUrl: card.coverUrl, progressTotal: card.progressTotal, status, favorite }
-      : { apiId: card.apiId, status, favorite };
+      ? { type: card.type, apiId: card.apiId, source: card.source, title: card.title, creator: card.creator, year: card.year, coverUrl: card.coverUrl, progressTotal: card.progressTotal, favorite }
+      : { apiId: card.apiId, favorite };
     const res = await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     if (res.ok) {
-      toast({ title: favorite ? "Saved as a favourite!" : "Added to your stack!" });
+      toast({ title: favorite ? "Saved as a favourite!" : "Added to your stack — set its status from your profile." });
     } else {
       const data = await res.json().catch(() => ({}));
       toast({ title: "Could not add title", description: data.error, variant: "destructive" });
     }
     setAdding(null);
-  }, [session, status, setView, toast]);
+  }, [session, setView, toast]);
 
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10 sm:py-14">
       <div className="max-w-2xl">
         <p className="text-xs font-bold tracking-[.18em] text-primary">DISCOVER</p>
         <h1 className="mt-3 text-4xl font-black tracking-tight">Find your next favourite.</h1>
-        <p className="mt-3 text-muted-foreground">Live-search anime, manga, and books. Browse a curated preview for movies, TV, games, and music.</p>
+        <p className="mt-3 text-muted-foreground">Live-search anime, manga, and books — the All tab searches everything at once. Movies, TV, games, and music show a curated preview for now.</p>
       </div>
 
       <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -105,13 +122,11 @@ export default function DiscoverPage() {
           ))}
         </div>
         <div className="flex gap-2">
-          <select className="w-40 rounded-md border border-input bg-background px-3 py-2 text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="planned">Plan to try</option>
-            <option value="watching">Watching / playing</option>
-            <option value="completed">Completed</option>
-            <option value="onhold">On hold</option>
-            <option value="dropped">Dropped</option>
-          </select>
+          {showTrendingSort && (
+            <select className="w-40 rounded-md border border-input bg-background px-3 py-2 text-sm" value={sort} onChange={(e) => setSort(e.target.value)}>
+              {SORT_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+          )}
           <div className="relative">
             <Input className="w-full sm:w-64 pl-8" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search titles or creators" />
             <span className="absolute left-2.5 top-2.5 text-muted-foreground text-sm">⌕</span>
