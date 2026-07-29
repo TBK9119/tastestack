@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/app-store";
-import { CATALOG } from "@/lib/catalog";
+import { CATALOG, catalogSourceForType } from "@/lib/catalog";
 import { MEDIA_TYPES, TYPE_ICONS, type MediaType, mediaConfig } from "@/lib/constants";
 import type { NormalizedResult } from "@/lib/api/anilist";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ type Card = {
 };
 
 const TABS: Array<"all" | MediaType> = ["all", "anime", "manga", "movie", "tv", "game", "album", "book"];
-const TRENDING_TYPES = ["anime", "manga"];
+const TRENDING_TYPES = ["anime", "manga", "book"];
 const SORT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "trending", label: "Trending" },
   { value: "popular", label: "Most popular" },
@@ -35,7 +35,26 @@ export default function DiscoverPage() {
   const [liveResults, setLiveResults] = useState<NormalizedResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [liveTypes, setLiveTypes] = useState<string[]>(["anime", "manga", "book"]);
+  const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
+  const [favoritedKeys, setFavoritedKeys] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  // A card's identity in the database is (type, source, apiId) — catalog
+  // cards don't carry a `source` field, so it's derived the same way the
+  // /api/items POST route derives it for catalog upserts.
+  const keyFor = useCallback((card: Card) => `${card.type}:${card.source || catalogSourceForType(card.type)}:${card.apiId}`, []);
+
+  useEffect(() => {
+    if (!session) { setAddedKeys(new Set()); setFavoritedKeys(new Set()); return; }
+    fetch("/api/items")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!Array.isArray(data.items)) return;
+        setAddedKeys(new Set(data.items.map((it: any) => `${it.type}:${it.source}:${it.apiId}`)));
+        setFavoritedKeys(new Set(data.items.filter((it: any) => it.isFavorite).map((it: any) => `${it.type}:${it.source}:${it.apiId}`)));
+      })
+      .catch(() => {});
+  }, [session]);
 
   useEffect(() => {
     fetch("/api/config")
@@ -96,13 +115,16 @@ export default function DiscoverPage() {
       : { apiId: card.apiId, favorite };
     const res = await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     if (res.ok) {
+      const cardKey = keyFor(card);
+      setAddedKeys((prev) => new Set(prev).add(cardKey));
+      if (favorite) setFavoritedKeys((prev) => new Set(prev).add(cardKey));
       toast({ title: favorite ? "Saved as a favourite!" : "Added to your stack — set its status from your profile." });
     } else {
       const data = await res.json().catch(() => ({}));
       toast({ title: "Could not add title", description: data.error, variant: "destructive" });
     }
     setAdding(null);
-  }, [session, setView, toast]);
+  }, [session, setView, toast, keyFor]);
 
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10 sm:py-14">
@@ -164,11 +186,11 @@ export default function DiscoverPage() {
                 </div>
               </div>
               <div className="border-t px-4 py-3 flex gap-2">
-                <Button variant="outline" size="sm" className="grow" disabled={adding === `${item.apiId}-false`} onClick={() => add(item)}>
-                  {adding === `${item.apiId}-false` ? "Adding…" : "+ Add to stack"}
+                <Button variant="outline" size="sm" className="grow" disabled={adding === `${item.apiId}-false` || addedKeys.has(keyFor(item))} onClick={() => add(item)}>
+                  {adding === `${item.apiId}-false` ? "Adding…" : addedKeys.has(keyFor(item)) ? "✓ In your stack" : "+ Add to stack"}
                 </Button>
-                <Button variant="outline" size="sm" className="px-3 text-yellow-500 hover:text-yellow-400 hover:border-yellow-500" disabled={adding === `${item.apiId}-true`} onClick={() => add(item, true)}>
-                  {adding === `${item.apiId}-true` ? "…" : "♥"}
+                <Button variant="outline" size="sm" className={`px-3 text-yellow-500 hover:text-yellow-400 hover:border-yellow-500 ${favoritedKeys.has(keyFor(item)) ? "bg-yellow-50" : ""}`} disabled={adding === `${item.apiId}-true` || favoritedKeys.has(keyFor(item))} onClick={() => add(item, true)}>
+                  {adding === `${item.apiId}-true` ? "…" : favoritedKeys.has(keyFor(item)) ? "♥" : "♡"}
                 </Button>
               </div>
             </CardContent>

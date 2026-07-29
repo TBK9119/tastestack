@@ -35,3 +35,40 @@ export async function searchOpenLibrary(query: string): Promise<NormalizedResult
     clearTimeout(timeout);
   }
 }
+
+// OpenLibrary's own "what's being logged right now" endpoint — same doc shape
+// as search.json (key, title, author_name, cover_i, first_publish_year), so it
+// reuses the same field mapping. Used to give the Books tab a default browse
+// view (real cover art) before the person has typed anything, mirroring the
+// AniList trending browse already used for Anime/Manga.
+export type OpenLibraryTrendingPeriod = "daily" | "weekly" | "monthly" | "yearly" | "forever";
+
+export async function fetchTrendingOpenLibrary(period: OpenLibraryTrendingPeriod = "weekly", limit = 12): Promise<NormalizedResult[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const url = `https://openlibrary.org/trending/${period}.json?limit=${limit}`;
+    const res = await fetch(url, { signal: controller.signal, headers: { Accept: "application/json" } });
+    if (!res.ok) return [];
+    const json = await res.json();
+    const works = json?.works;
+    if (!Array.isArray(works)) return [];
+    return works
+      .filter((w: any) => w?.title && w?.key)
+      .map((w: any) => ({
+        type: "book" as const,
+        apiId: String(w.key).replace("/works/", ""),
+        source: "openlibrary",
+        title: w.title,
+        creator: w.author_name?.[0] || "Unknown",
+        year: w.first_publish_year ? String(w.first_publish_year) : "—",
+        coverUrl: w.cover_i ? `https://covers.openlibrary.org/b/id/${w.cover_i}-L.jpg` : "",
+        description: "",
+        progressTotal: 0,
+      }));
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
