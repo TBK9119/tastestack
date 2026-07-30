@@ -23,6 +23,7 @@ export function AuthProviderInner({ children }: { children: React.ReactNode }) {
       if (view === "landing") setView("discover");
     } else if (status === "unauthenticated") {
       setUser(null);
+      if (["settings", "lists", "feed", "profile"].includes(view)) setView("landing");
     }
     if (status !== "loading") setLoading(false);
   }, [session, status, setUser, setLoading, view, setView]);

@@ -15,9 +15,9 @@ import ImportSection from "@/components/tastestack/ImportSection";
 const COLORS = ["#2e51a2", "#7c3aed", "#be185d", "#0f766e", "#b45309"];
 
 export default function SettingsPage() {
-  const { data: session } = useSession();
+  const { data: session, update } = useSession();
   const { user, setView } = useAppStore();
-  const [form, setForm] = useState({ displayName: "", bio: "", bannerColor: "#2e51a2", isPublic: true });
+  const [form, setForm] = useState({ username: "", displayName: "", bio: "", bannerColor: "#2e51a2", isPublic: true });
   const [state, setState] = useState("");
   const { toast } = useToast();
 
@@ -30,7 +30,12 @@ export default function SettingsPage() {
     setState("Saving…");
     const res = await fetch("/api/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
     const data = await res.json();
-    if (res.ok) { toast({ title: "Profile updated!" }); setState("Saved — your profile is up to date."); }
+    if (res.ok) {
+      toast({ title: "Profile updated!" });
+      setState("Saved — your profile is up to date.");
+      setForm((f) => ({ ...f, username: data.username }));
+      await update(); // refresh the session so the navbar and elsewhere pick up the new username/display name right away
+    }
     else { setState(data.error || "Could not save."); toast({ title: "Error", description: data.error, variant: "destructive" }); }
   }
 
@@ -50,6 +55,14 @@ export default function SettingsPage() {
 
       <form onSubmit={save} className="mt-8 space-y-6">
         <Card><CardContent className="p-5 sm:p-7 space-y-6">
+          <div>
+            <Label>Username</Label>
+            <div className="mt-2 flex items-center gap-1.5">
+              <span className="text-muted-foreground">@</span>
+              <Input value={form.username} maxLength={20} onChange={(e) => setForm({ ...form, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })} />
+            </div>
+            <p className="mt-1.5 text-xs text-muted-foreground">3-20 characters: letters, numbers, underscore. This changes your profile link and how people find you.</p>
+          </div>
           <div>
             <Label>Display name</Label>
             <Input className="mt-2" value={form.displayName} maxLength={40} onChange={(e) => setForm({ ...form, displayName: e.target.value })} />

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import type { MediaType, ItemStatus } from "@/lib/constants";
 
 export type View = "landing" | "login" | "signup" | "discover" | "profile" | "public-profile" | "feed" | "settings" | "lists";
@@ -72,13 +73,24 @@ interface AppState {
   setLoading: (loading: boolean) => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  view: "landing",
-  setView: (view) => set({ view }),
-  viewProfileUsername: null,
-  setViewProfileUsername: (username) => set({ viewProfileUsername: username }),
-  user: null,
-  setUser: (user) => set({ user }),
-  loading: true,
-  setLoading: (loading) => set({ loading }),
-}));
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      view: "landing",
+      setView: (view) => set({ view }),
+      viewProfileUsername: null,
+      setViewProfileUsername: (username) => set({ viewProfileUsername: username }),
+      user: null,
+      setUser: (user) => set({ user }),
+      loading: true,
+      setLoading: (loading) => set({ loading }),
+    }),
+    {
+      name: "tastestack-view",
+      storage: createJSONStorage(() => sessionStorage),
+      // Only the "which page am I on" bits survive a reload — user/session
+      // data always comes fresh from NextAuth via AuthProvider, never cached.
+      partialize: (state) => ({ view: state.view, viewProfileUsername: state.viewProfileUsername }),
+    }
+  )
+);

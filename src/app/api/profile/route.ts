@@ -22,6 +22,17 @@ export async function PATCH(request: NextRequest) {
   if (typeof body.bio === "string") data.bio = body.bio.trim().slice(0, 240);
   if (typeof body.bannerColor === "string") data.bannerColor = body.bannerColor;
   if (typeof body.isPublic === "boolean") data.isPublic = body.isPublic;
+  if (typeof body.username === "string") {
+    const normalized = body.username.toLowerCase().trim().replace(/\s+/g, "");
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(normalized)) {
+      return NextResponse.json({ error: "Username must be 3-20 characters (letters, numbers, underscore)." }, { status: 400 });
+    }
+    if (normalized !== session.user.username) {
+      const clash = await db.user.findUnique({ where: { username: normalized } });
+      if (clash) return NextResponse.json({ error: "That username is already taken." }, { status: 409 });
+      data.username = normalized;
+    }
+  }
 
   const updated = await db.user.update({ where: { id: session.user.id }, data });
   return NextResponse.json({

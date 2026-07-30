@@ -30,12 +30,23 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.username = user.username;
         token.displayName = user.displayName;
         token.avatarUrl = user.avatarUrl;
+      }
+      // Client calls useSession().update() after a profile edit (see
+      // SettingsPage) to force this branch, so username/displayName/avatar
+      // changes show up immediately instead of waiting for the next login.
+      if (trigger === "update" && token.id) {
+        const fresh = await db.user.findUnique({ where: { id: token.id as string } });
+        if (fresh) {
+          token.username = fresh.username;
+          token.displayName = fresh.displayName;
+          token.avatarUrl = fresh.avatarUrl || null;
+        }
       }
       return token;
     },

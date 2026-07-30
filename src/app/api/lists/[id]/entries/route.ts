@@ -51,7 +51,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ entry });
   } catch (err: any) {
     if (err?.code === "P2002") return NextResponse.json({ error: "Already in this list." }, { status: 409 });
-    throw err;
+    console.error("List entry add error:", err);
+    const hint = err?.code === "P2021" ? " (the lists table isn't in the database yet — run `npm run db:push`)" : "";
+    return NextResponse.json({ error: `Could not add to list.${hint}` }, { status: 500 });
   }
 }
 

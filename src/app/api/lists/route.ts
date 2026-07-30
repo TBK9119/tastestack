@@ -43,15 +43,22 @@ export async function POST(request: NextRequest) {
   const name = String(body.name || "").trim().slice(0, 80);
   if (!name) return NextResponse.json({ error: "Give your list a name." }, { status: 400 });
 
-  const list = await db.list.create({
-    data: {
-      userId: session.user.id,
-      name,
-      description: String(body.description || "").trim().slice(0, 240),
-      isPublic: body.isPublic !== false,
-    },
-    include: { entries: true, _count: { select: { entries: true } } },
-  });
+  let list;
+  try {
+    list = await db.list.create({
+      data: {
+        userId: session.user.id,
+        name,
+        description: String(body.description || "").trim().slice(0, 240),
+        isPublic: body.isPublic !== false,
+      },
+      include: { entries: true, _count: { select: { entries: true } } },
+    });
+  } catch (err: any) {
+    console.error("List create error:", err);
+    const hint = err?.code === "P2021" ? " (the lists table isn't in the database yet — run `npm run db:push`)" : "";
+    return NextResponse.json({ error: `Could not create list.${hint}` }, { status: 500 });
+  }
 
   return NextResponse.json({ list });
 }
