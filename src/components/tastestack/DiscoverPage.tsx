@@ -9,6 +9,8 @@ import type { NormalizedResult } from "@/lib/api/anilist";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import CoverImage from "@/components/tastestack/CoverImage";
 import { useToast } from "@/hooks/use-toast";
 
 type Card = {
@@ -37,6 +39,8 @@ export default function DiscoverPage() {
   const [liveTypes, setLiveTypes] = useState<string[]>(["anime", "manga", "book"]);
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
   const [favoritedKeys, setFavoritedKeys] = useState<Set<string>>(new Set());
+  const [lists, setLists] = useState<{ id: string; name: string }[]>([]);
+  const [newListName, setNewListName] = useState("");
   const { toast } = useToast();
 
   // A card's identity in the database is (type, source, apiId) — catalog
@@ -62,6 +66,14 @@ export default function DiscoverPage() {
       .then((data) => { if (Array.isArray(data.liveTypes)) setLiveTypes(data.liveTypes); })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!session) { setLists([]); return; }
+    fetch("/api/lists")
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data.lists)) setLists(data.lists.map((l: any) => ({ id: l.id, name: l.name }))); })
+      .catch(() => {});
+  }, [session]);
 
   const isLiveTab = type !== "all" && liveTypes.includes(type);
   const hasQuery = query.trim().length > 0;
@@ -126,6 +138,36 @@ export default function DiscoverPage() {
     setAdding(null);
   }, [session, setView, toast, keyFor]);
 
+  const addToList = useCallback(async (listId: string, card: Card) => {
+    if (!session) { setView("login"); return; }
+    const payload = card.source
+      ? { type: card.type, apiId: card.apiId, source: card.source, title: card.title, creator: card.creator, year: card.year, coverUrl: card.coverUrl }
+      : { apiId: card.apiId };
+    const res = await fetch(`/api/lists/${listId}/entries`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const listName = lists.find((l) => l.id === listId)?.name || "your list";
+    if (res.ok) {
+      toast({ title: `Added to "${listName}"` });
+    } else {
+      const data = await res.json().catch(() => ({}));
+      const already = data.error === "Already in this list.";
+      toast({ title: already ? `Already in "${listName}"` : "Could not add to list", description: already ? undefined : data.error, variant: already ? "default" : "destructive" });
+    }
+  }, [session, setView, toast, lists]);
+
+  const quickCreateList = useCallback(async (card: Card) => {
+    const name = newListName.trim();
+    if (!name) return;
+    const res = await fetch("/api/lists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, isPublic: true }) });
+    if (res.ok) {
+      const data = await res.json();
+      setLists((prev) => [{ id: data.list.id, name: data.list.name }, ...prev]);
+      setNewListName("");
+      await addToList(data.list.id, card);
+    } else {
+      toast({ title: "Could not create list", variant: "destructive" });
+    }
+  }, [newListName, addToList, toast]);
+
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10 sm:py-14">
       <div className="max-w-2xl">
@@ -163,18 +205,12 @@ export default function DiscoverPage() {
       )}
 
       <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cards.map((item) => (
+        {!searching && cards.map((item) => (
           <Card key={item.key} className="overflow-hidden">
             <CardContent className="p-0">
               <div className="flex p-4 gap-4">
                 <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg border">
-                  {item.coverUrl ? (
-                    <img src={item.coverUrl} alt={item.title} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="flex h-full w-full items-end p-2 text-2xl" style={{ background: `linear-gradient(145deg, ${item.accent || "#2e51a2"}, hsl(var(--card)) 90%)` }}>
-                      {item.cover || TYPE_ICONS[item.type]}
-                    </div>
-                  )}
+                  <CoverImage src={item.coverUrl} alt={item.title} icon={item.cover || TYPE_ICONS[item.type]} accent={item.accent} fallbackClassName="p-2" sizes="80px" />
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-xs font-semibold text-primary">
@@ -192,13 +228,56 @@ export default function DiscoverPage() {
                 <Button variant="outline" size="sm" className={`px-3 text-yellow-500 hover:text-yellow-400 hover:border-yellow-500 ${favoritedKeys.has(keyFor(item)) ? "bg-yellow-50" : ""}`} disabled={adding === `${item.apiId}-true` || favoritedKeys.has(keyFor(item))} onClick={() => add(item, true)}>
                   {adding === `${item.apiId}-true` ? "…" : favoritedKeys.has(keyFor(item)) ? "♥" : "♡"}
                 </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="px-3" title="Add to a list">☰</Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-2" align="end">
+                    <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">Add to a list</p>
+                    <div className="max-h-40 overflow-y-auto">
+                      {lists.length === 0 && <p className="px-2 py-1.5 text-xs text-muted-foreground">No lists yet — create one below.</p>}
+                      {lists.map((list) => (
+                        <button key={list.id} onClick={() => addToList(list.id, item)} className="block w-full truncate rounded px-2 py-1.5 text-left text-sm hover:bg-accent">
+                          {list.name}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex gap-1.5 border-t pt-2">
+                      <Input value={newListName} onChange={(e) => setNewListName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); quickCreateList(item); } }} placeholder="New list name" className="h-8 text-xs" />
+                      <Button size="sm" className="h-8 shrink-0 px-2.5" onClick={() => quickCreateList(item)} disabled={!newListName.trim()}>Add</Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {searching && <Card className="mt-8 py-14 text-center text-muted-foreground"><CardContent>Searching…</CardContent></Card>}
+      {searching && (
+        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i} className="overflow-hidden">
+              <CardContent className="p-0">
+                <div className="flex p-4 gap-4 animate-pulse">
+                  <div className="h-28 w-20 shrink-0 rounded-lg bg-muted" />
+                  <div className="min-w-0 flex-1 space-y-2.5 pt-1">
+                    <div className="h-3 w-14 rounded bg-muted" />
+                    <div className="h-4 w-3/4 rounded bg-muted" />
+                    <div className="h-3 w-1/2 rounded bg-muted" />
+                    <div className="h-3 w-full rounded bg-muted mt-2" />
+                    <div className="h-3 w-5/6 rounded bg-muted" />
+                  </div>
+                </div>
+                <div className="border-t px-4 py-3 flex gap-2 animate-pulse">
+                  <div className="h-8 grow rounded bg-muted" />
+                  <div className="h-8 w-10 rounded bg-muted" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
       {!searching && !cards.length && <Card className="mt-8 py-14 text-center text-muted-foreground"><CardContent>No titles found. Try a different search.</CardContent></Card>}
     </div>
   );

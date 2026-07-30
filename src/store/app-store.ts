@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { MediaType, ItemStatus } from "@/lib/constants";
 
-export type View = "landing" | "login" | "signup" | "discover" | "profile" | "public-profile" | "feed" | "settings";
+export type View = "landing" | "login" | "signup" | "discover" | "profile" | "public-profile" | "feed" | "settings" | "lists";
 
 export interface User {
   id: string;

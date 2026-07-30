@@ -12,6 +12,7 @@ const DiscoverPage = dynamic(() => import("@/components/tastestack/DiscoverPage"
 const ProfilePage = dynamic(() => import("@/components/tastestack/ProfilePage"), { ssr: false });
 const FeedPage = dynamic(() => import("@/components/tastestack/FeedPage"), { ssr: false });
 const SettingsPage = dynamic(() => import("@/components/tastestack/SettingsPage"), { ssr: false });
+const ListsPage = dynamic(() => import("@/components/tastestack/ListsPage"), { ssr: false });
 
 function AppContent() {
   const { view } = useAppStore();
@@ -27,6 +28,7 @@ function AppContent() {
         {(view === "profile" || view === "public-profile") && <ProfilePage />}
         {view === "feed" && <FeedPage />}
         {view === "settings" && <SettingsPage />}
+        {view === "lists" && <ListsPage />}
       </main>
       <footer className="border-t py-6 mt-auto">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">

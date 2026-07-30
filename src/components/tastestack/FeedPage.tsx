@@ -35,7 +35,19 @@ export default function FeedPage() {
       <h1 className="mt-3 text-3xl font-black">Your taste, in motion.</h1>
 
       {loading ? (
-        <div className="mt-8 text-center text-muted-foreground">Loading…</div>
+        <div className="mt-8 space-y-3 animate-pulse">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="flex items-center gap-4 p-4">
+                <div className="h-11 w-11 rounded-xl bg-muted shrink-0" />
+                <div className="space-y-2 flex-1">
+                  <div className="h-3.5 w-2/3 rounded bg-muted" />
+                  <div className="h-3 w-1/4 rounded bg-muted" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       ) : activities.length ? (
         <div className="mt-8 space-y-3">
           {activities.map((activity) => {

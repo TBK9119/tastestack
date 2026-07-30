@@ -27,6 +27,7 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-5">
           {navLink("discover", "Discover")}
           {session && navLink("feed", "Feed")}
+          {session && navLink("lists", "Lists")}
         </div>
 
         <div className="ml-auto flex items-center gap-3">

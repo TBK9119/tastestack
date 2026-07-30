@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import ImportSection from "@/components/tastestack/ImportSection";
 
 const COLORS = ["#2e51a2", "#7c3aed", "#be185d", "#0f766e", "#b45309"];
 
@@ -78,6 +79,10 @@ export default function SettingsPage() {
           </div>
         </CardContent></Card>
       </form>
+
+      <div className="mt-8">
+        <ImportSection />
+      </div>
     </div>
   );
 }

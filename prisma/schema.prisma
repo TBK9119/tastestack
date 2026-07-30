@@ -23,6 +23,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   items      Item[]
+  lists      List[]
   activities Activity[]
   followers  Follow[]  @relation("Following")
   following  Follow[]  @relation("Follower")
@@ -58,6 +59,47 @@ model Item {
   @@unique([userId, type, apiId, source])
   @@index([userId, type, status])
   @@map("items")
+}
+
+// ---------- Custom lists / collections ----------
+model List {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String   @default("")
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entries ListEntry[]
+
+  @@index([userId])
+  @@map("lists")
+}
+
+// A list entry stores its own denormalized title data (same shape as Item)
+// rather than pointing at a row in Item — so people can curate a list from
+// anything in Discover regardless of whether they've tracked it in their
+// stack yet, same as Letterboxd lists aren't limited to your watched films.
+model ListEntry {
+  id        String   @id @default(cuid())
+  listId    String
+  list      List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  type      String
+  apiId     String
+  source    String
+  title     String
+  coverUrl  String   @default("")
+  year      String   @default("")
+  extra     String   @default("{}")
+  note      String   @default("")
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([listId, type, apiId, source])
+  @@index([listId])
+  @@map("list_entries")
 }
 
 // ---------- Social: follow graph ----------

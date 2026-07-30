@@ -6,6 +6,15 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "**.anilist.co" },
+      { protocol: "https", hostname: "image.tmdb.org" },
+      { protocol: "https", hostname: "media.rawg.io" },
+      { protocol: "https", hostname: "lastfm.freetls.fastly.net" },
+      { protocol: "https", hostname: "covers.openlibrary.org" },
+    ],
+  },
 };
 
 export default nextConfig;

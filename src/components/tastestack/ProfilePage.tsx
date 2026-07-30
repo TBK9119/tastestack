@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
+import CoverImage from "@/components/tastestack/CoverImage";
 
 function parseExtra(extra: string) {
   try { return JSON.parse(extra) as { accent?: string; cover?: string; creator?: string }; } catch { return {}; }
@@ -32,13 +33,7 @@ function ItemCard({ item, isOwn, onEdit, progressLabel }: {
         </button>
       )}
       <div className="relative aspect-[3/4] overflow-hidden rounded-lg border">
-        {item.coverUrl ? (
-          <img src={item.coverUrl} alt={item.title} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-        ) : (
-          <div className="flex h-full w-full items-end p-3 text-2xl" style={{ background: `linear-gradient(145deg, ${extra.accent || "#2e51a2"}, hsl(var(--card)) 88%)` }}>
-            {extra.cover || TYPE_ICONS[item.type as MediaType] || "✦"}
-          </div>
-        )}
+        <CoverImage src={item.coverUrl} alt={item.title} icon={extra.cover || TYPE_ICONS[item.type as MediaType]} accent={extra.accent} fallbackClassName="p-3" sizes="(max-width: 640px) 33vw, 150px" />
       </div>
       <p className="mt-1.5 truncate text-sm font-semibold">{item.title}</p>
       <p className="text-xs text-muted-foreground">
@@ -129,7 +124,14 @@ export default function ProfilePage() {
     fetchProfile();
   };
 
-  if (loading) return <div className="max-w-6xl mx-auto px-5 py-20 text-center text-muted-foreground">Loading profile…</div>;
+  if (loading) return (
+    <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10 animate-pulse">
+      <div className="h-40 rounded-xl bg-muted" />
+      <div className="mt-8 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+        {Array.from({ length: 8 }).map((_, i) => <div key={i} className="aspect-[3/4] rounded-lg bg-muted" />)}
+      </div>
+    </div>
+  );
   if (!profile) return <div className="max-w-6xl mx-auto px-5 py-20 text-center text-muted-foreground">Profile not found.</div>;
 
   const isOwn = profile.isOwn || profile.username === user?.username;
