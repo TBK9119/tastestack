@@ -18,7 +18,6 @@ export function AuthProviderInner({ children }: { children: React.ReactNode }) {
         email: session.user.email,
         username: session.user.username,
         displayName: session.user.displayName,
-        avatarUrl: session.user.avatarUrl,
       });
       if (view === "landing") setView("discover");
     } else if (status === "unauthenticated") {

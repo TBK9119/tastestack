@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/app-store";
 import { Button } from "@/components/ui/button";
@@ -9,21 +9,65 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import ImportSection from "@/components/tastestack/ImportSection";
 
 const COLORS = ["#2e51a2", "#7c3aed", "#be185d", "#0f766e", "#b45309"];
 
+// Center-crops to a square and downsizes to keep the resulting data URI
+// small enough to store directly on the user row — no object storage
+// service needed for something this size.
+function resizeImageToDataUrl(file: File, maxSize = 256, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read file."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Could not read image."));
+      img.onload = () => {
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2;
+        const sy = (img.height - side) / 2;
+        const canvas = document.createElement("canvas");
+        canvas.width = maxSize;
+        canvas.height = maxSize;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas not supported.")); return; }
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, maxSize, maxSize);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function SettingsPage() {
   const { data: session, update } = useSession();
   const { user, setView } = useAppStore();
-  const [form, setForm] = useState({ username: "", displayName: "", bio: "", bannerColor: "#2e51a2", isPublic: true });
+  const [form, setForm] = useState({ username: "", displayName: "", bio: "", avatarUrl: "", bannerColor: "#2e51a2", isPublic: true });
   const [state, setState] = useState("");
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     if (session) fetch("/api/profile").then((r) => r.json()).then((data) => setForm(data)).catch(() => {});
   }, [session]);
+
+  async function handleAvatarFile(file: File) {
+    if (!file.type.startsWith("image/")) { toast({ title: "Please choose an image file", variant: "destructive" }); return; }
+    setAvatarBusy(true);
+    try {
+      const dataUrl = await resizeImageToDataUrl(file);
+      setForm((f) => ({ ...f, avatarUrl: dataUrl }));
+    } catch {
+      toast({ title: "Could not process that image", variant: "destructive" });
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -55,6 +99,24 @@ export default function SettingsPage() {
 
       <form onSubmit={save} className="mt-8 space-y-6">
         <Card><CardContent className="p-5 sm:p-7 space-y-6">
+          <div>
+            <Label>Profile picture</Label>
+            <div className="mt-2 flex items-center gap-4">
+              <Avatar className="h-16 w-16 rounded-xl">
+                {form.avatarUrl && <AvatarImage src={form.avatarUrl} className="object-cover" />}
+                <AvatarFallback className="rounded-xl text-lg font-bold text-white" style={{ background: form.bannerColor }}>
+                  {(form.displayName || "?").charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex items-center gap-2">
+                <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); e.target.value = ""; }} />
+                <Button type="button" variant="outline" size="sm" disabled={avatarBusy} onClick={() => avatarInputRef.current?.click()}>
+                  {avatarBusy ? "Processing…" : "Change picture"}
+                </Button>
+                {form.avatarUrl && <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setForm((f) => ({ ...f, avatarUrl: "" }))}>Remove</Button>}
+              </div>
+            </div>
+          </div>
           <div>
             <Label>Username</Label>
             <div className="mt-2 flex items-center gap-1.5">

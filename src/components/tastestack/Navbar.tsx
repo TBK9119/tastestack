@@ -1,8 +1,25 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useAppStore, type View } from "@/store/app-store";
 import { useSession, signOut } from "next-auth/react";
+import { useTheme } from "next-themes";
+import { Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  // Server has no concept of the person's theme preference, so render a
+  // blank placeholder until mounted client-side to avoid a hydration mismatch.
+  if (!mounted) return <div className="h-9 w-9" />;
+  return (
+    <Button variant="ghost" size="icon" onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")} title="Toggle theme">
+      {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </Button>
+  );
+}
 
 export default function Navbar() {
   const { view, setView, setViewProfileUsername } = useAppStore();
@@ -31,6 +48,7 @@ export default function Navbar() {
         </div>
 
         <div className="ml-auto flex items-center gap-3">
+          <ThemeToggle />
           {status === "loading" ? (
             <span className="text-muted-foreground text-sm">…</span>
           ) : session?.user ? (

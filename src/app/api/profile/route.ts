@@ -22,6 +22,15 @@ export async function PATCH(request: NextRequest) {
   if (typeof body.bio === "string") data.bio = body.bio.trim().slice(0, 240);
   if (typeof body.bannerColor === "string") data.bannerColor = body.bannerColor;
   if (typeof body.isPublic === "boolean") data.isPublic = body.isPublic;
+  if (typeof body.avatarUrl === "string") {
+    if (body.avatarUrl === "") {
+      data.avatarUrl = "";
+    } else if (body.avatarUrl.startsWith("data:image/") && body.avatarUrl.length <= 500_000) {
+      data.avatarUrl = body.avatarUrl;
+    } else {
+      return NextResponse.json({ error: "That image couldn't be processed — try a smaller picture." }, { status: 400 });
+    }
+  }
   if (typeof body.username === "string") {
     const normalized = body.username.toLowerCase().trim().replace(/\s+/g, "");
     if (!/^[a-zA-Z0-9_]{3,20}$/.test(normalized)) {

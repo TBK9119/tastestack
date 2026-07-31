@@ -33,6 +33,10 @@ function parseExtra(extra: string) {
   try { return JSON.parse(extra) as { accent?: string; cover?: string; creator?: string }; } catch { return {}; }
 }
 
+interface SearchResult {
+  type: MediaType; apiId: string; source: string; title: string; creator: string; year: string; coverUrl: string;
+}
+
 function SortableEntry({ entry, isOwn, onRemove }: { entry: ListEntryData; isOwn: boolean; onRemove: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: entry.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
@@ -66,6 +70,10 @@ export default function ListsPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", description: "", isPublic: true });
   const [saving, setSaving] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addQuery, setAddQuery] = useState("");
+  const [addResults, setAddResults] = useState<SearchResult[]>([]);
+  const [addSearching, setAddSearching] = useState(false);
   const { toast } = useToast();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -148,6 +156,36 @@ export default function ListsPage() {
     await fetch(`/api/lists/${openList.id}/entries/${entryId}`, { method: "DELETE" });
   };
 
+  useEffect(() => {
+    if (!addOpen) return;
+    const q = addQuery.trim();
+    if (!q) { setAddResults([]); setAddSearching(false); return; }
+    setAddSearching(true);
+    const handle = setTimeout(() => {
+      fetch(`/api/search?type=all&q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((data) => setAddResults(Array.isArray(data.results) ? data.results : []))
+        .catch(() => {})
+        .finally(() => setAddSearching(false));
+    }, 350);
+    return () => clearTimeout(handle);
+  }, [addQuery, addOpen]);
+
+  const addTitleToOpenList = async (result: SearchResult) => {
+    if (!openList) return;
+    const payload = { type: result.type, apiId: result.apiId, source: result.source, title: result.title, creator: result.creator, year: result.year, coverUrl: result.coverUrl };
+    const res = await fetch(`/api/lists/${openList.id}/entries`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    if (res.ok) {
+      const data = await res.json();
+      setOpenList((prev) => prev ? { ...prev, entries: [...prev.entries, data.entry] } : prev);
+      toast({ title: `Added "${result.title}"` });
+    } else {
+      const d = await res.json().catch(() => ({}));
+      const already = d.error === "Already in this list.";
+      toast({ title: already ? "Already in this list" : "Could not add", description: already ? undefined : d.error, variant: already ? "default" : "destructive" });
+    }
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     if (!openList) return;
     const { active, over } = event;
@@ -182,12 +220,20 @@ export default function ListsPage() {
             {openList.description && <p className="mt-2 max-w-xl text-muted-foreground">{openList.description}</p>}
             <p className="mt-1 text-xs text-muted-foreground">by @{openList.user.username} · {openList.entries.length} title{openList.entries.length === 1 ? "" : "s"}</p>
           </div>
-          {openList.isOwn && <Button variant="outline" size="sm" onClick={openEdit}>Edit list</Button>}
+          {openList.isOwn && (
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => setAddOpen(true)}>+ Add titles</Button>
+              <Button variant="outline" size="sm" onClick={openEdit}>Edit list</Button>
+            </div>
+          )}
         </div>
 
         {openList.entries.length === 0 ? (
           <Card className="mt-8 py-14 text-center text-muted-foreground">
-            <CardContent>Nothing here yet. Add titles to this list from Discover or your profile.</CardContent>
+            <CardContent className="flex flex-col items-center">
+              <p>Nothing here yet.</p>
+              {openList.isOwn && <Button className="mt-4" size="sm" onClick={() => setAddOpen(true)}>+ Add titles</Button>}
+            </CardContent>
           </Card>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -198,6 +244,37 @@ export default function ListsPage() {
             </SortableContext>
           </DndContext>
         )}
+
+        <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) { setAddQuery(""); setAddResults([]); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add titles to &quot;{openList.name}&quot;</DialogTitle>
+              <DialogDescription>Search anime, manga, books, movies, TV, games, or music.</DialogDescription>
+            </DialogHeader>
+            <Input autoFocus placeholder="Search titles…" value={addQuery} onChange={(e) => setAddQuery(e.target.value)} />
+            <div className="max-h-80 space-y-1 overflow-y-auto">
+              {addSearching && <p className="py-6 text-center text-sm text-muted-foreground">Searching…</p>}
+              {!addSearching && addQuery.trim() && addResults.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No results.</p>}
+              {!addSearching && addResults.map((r) => {
+                const already = openList.entries.some((e) => e.type === r.type && e.apiId === r.apiId && e.source === r.source);
+                return (
+                  <div key={`${r.type}-${r.source}-${r.apiId}`} className="flex items-center gap-3 rounded-lg p-2 hover:bg-accent">
+                    <div className="relative h-12 w-9 shrink-0 overflow-hidden rounded border">
+                      <CoverImage src={r.coverUrl} alt={r.title} icon={TYPE_ICONS[r.type]} sizes="40px" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{r.title}</p>
+                      <p className="truncate text-xs text-muted-foreground">{r.creator} · {r.year}</p>
+                    </div>
+                    <Button size="sm" variant={already ? "outline" : "default"} disabled={already} onClick={() => addTitleToOpenList(r)} className="shrink-0">
+                      {already ? "Added" : "+ Add"}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
           <DialogContent className="max-w-sm">

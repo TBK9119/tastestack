@@ -24,7 +24,6 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           username: user.username,
           displayName: user.displayName,
-          avatarUrl: user.avatarUrl || null,
         };
       },
     }),
@@ -35,17 +34,19 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.username = user.username;
         token.displayName = user.displayName;
-        token.avatarUrl = user.avatarUrl;
       }
       // Client calls useSession().update() after a profile edit (see
-      // SettingsPage) to force this branch, so username/displayName/avatar
+      // SettingsPage) to force this branch, so username/displayName
       // changes show up immediately instead of waiting for the next login.
+      // Deliberately NOT syncing avatarUrl here — it can be a sizeable
+      // base64 image now, and the JWT lives in a cookie sent on every
+      // request, so keep the session payload small and have anything that
+      // needs to render an avatar fetch it from the DB directly instead.
       if (trigger === "update" && token.id) {
         const fresh = await db.user.findUnique({ where: { id: token.id as string } });
         if (fresh) {
           token.username = fresh.username;
           token.displayName = fresh.displayName;
-          token.avatarUrl = fresh.avatarUrl || null;
         }
       }
       return token;
@@ -55,7 +56,6 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string;
         session.user.username = token.username as string;
         session.user.displayName = token.displayName as string;
-        session.user.avatarUrl = token.avatarUrl as string | null;
       }
       return session;
     },
@@ -69,7 +69,6 @@ declare module "next-auth" {
       email: string;
       username: string;
       displayName: string;
-      avatarUrl: string | null;
     };
   }
   interface User {
@@ -77,7 +76,6 @@ declare module "next-auth" {
     email: string;
     username: string;
     displayName: string;
-    avatarUrl: string | null;
   }
 }
 
@@ -86,6 +84,5 @@ declare module "next-auth/jwt" {
     id: string;
     username: string;
     displayName: string;
-    avatarUrl: string | null;
   }
 }

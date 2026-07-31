@@ -1,12 +1,31 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useAppStore } from "@/store/app-store";
-import { CATALOG, TYPE_ICONS } from "@/lib/catalog";
-import { MEDIA_TYPES } from "@/lib/constants";
+import { CATALOG } from "@/lib/catalog";
 import { Button } from "@/components/ui/button";
+import CoverImage from "@/components/tastestack/CoverImage";
 
 export default function LandingPage() {
   const { setView } = useAppStore();
+  // Starts as the curated icon tiles (identical to before) and swaps in real
+  // cover art from the same trending endpoints Discover uses, once it loads.
+  // Same sources, same attribution already in the footer — nothing here is
+  // fetched or displayed differently than in the rest of the product.
+  const [covers, setCovers] = useState<string[]>(Array(8).fill(""));
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/trending?type=anime&sort=trending").then((r) => r.json()).catch(() => ({ results: [] })),
+      fetch("/api/trending?type=manga&sort=trending").then((r) => r.json()).catch(() => ({ results: [] })),
+      fetch("/api/trending?type=book&sort=trending").then((r) => r.json()).catch(() => ({ results: [] })),
+    ]).then(([anime, manga, book]) => {
+      const pool = [...(anime.results || []), ...(manga.results || []), ...(book.results || [])]
+        .filter((r: any) => r?.coverUrl)
+        .map((r: any) => r.coverUrl as string);
+      if (pool.length >= 6) setCovers(pool.slice(0, 8));
+    }).catch(() => {});
+  }, []);
 
   return (
     <div className="overflow-hidden">
@@ -46,10 +65,9 @@ export default function LandingPage() {
                 <span className="ml-auto rounded-full bg-green-500/15 px-2.5 py-1 text-xs font-semibold text-green-500">Public</span>
               </div>
               <div className="mt-5 grid grid-cols-4 gap-2">
-                {CATALOG.slice(0, 8).map((item) => (
-                  <div key={item.apiId} className="aspect-[3/4] rounded-lg border p-2 flex items-end text-lg"
-                    style={{ background: `linear-gradient(145deg, ${item.accent}, hsl(var(--card)) 88%)` }}>
-                    {item.cover}
+                {CATALOG.slice(0, 8).map((item, i) => (
+                  <div key={item.apiId} className="relative aspect-[3/4] overflow-hidden rounded-lg border">
+                    <CoverImage src={covers[i]} alt={item.title} icon={item.cover} accent={item.accent} sizes="80px" />
                   </div>
                 ))}
               </div>
