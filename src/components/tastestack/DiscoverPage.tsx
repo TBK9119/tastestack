@@ -37,6 +37,7 @@ export default function DiscoverPage() {
   const [liveResults, setLiveResults] = useState<NormalizedResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [liveTypes, setLiveTypes] = useState<string[]>(["anime", "manga", "book"]);
+  const [catalogCovers, setCatalogCovers] = useState<Record<string, string>>({});
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
   const [favoritedKeys, setFavoritedKeys] = useState<Set<string>>(new Set());
   const [lists, setLists] = useState<{ id: string; name: string }[]>([]);
@@ -65,6 +66,28 @@ export default function DiscoverPage() {
       .then((r) => r.json())
       .then((data) => { if (Array.isArray(data.liveTypes)) setLiveTypes(data.liveTypes); })
       .catch(() => {});
+  }, []);
+
+  // The "All" tab's default (no-query) view falls back to the small curated
+  // CATALOG list, which only carries an icon glyph — no real cover art. For
+  // the three sources that don't need a paid key (anime/manga/book), fetch
+  // the real cover for each specific title once on mount so those cards
+  // look like the rest of the app instead of blank icon tiles. Movies, TV,
+  // games, and music stay icon tiles until their API keys are configured.
+  useEffect(() => {
+    const freeCatalogItems = CATALOG.filter((item) => item.type === "anime" || item.type === "manga" || item.type === "book");
+    Promise.all(
+      freeCatalogItems.map((item) =>
+        fetch(`/api/search?type=${item.type}&q=${encodeURIComponent(item.title)}`)
+          .then((r) => r.json())
+          .then((data) => ({ apiId: item.apiId, coverUrl: Array.isArray(data.results) ? data.results[0]?.coverUrl : undefined }))
+          .catch(() => ({ apiId: item.apiId, coverUrl: undefined }))
+      )
+    ).then((results) => {
+      const map: Record<string, string> = {};
+      for (const r of results) if (r.coverUrl) map[r.apiId] = r.coverUrl;
+      if (Object.keys(map).length) setCatalogCovers(map);
+    });
   }, []);
 
   useEffect(() => {
@@ -101,8 +124,8 @@ export default function DiscoverPage() {
 
   const catalogCards: Card[] = useMemo(
     () => CATALOG.filter((item) => (type === "all" || item.type === type) && `${item.title} ${item.creator}`.toLowerCase().includes(query.toLowerCase()))
-      .map((item) => ({ key: `catalog-${item.apiId}`, type: item.type, apiId: item.apiId, title: item.title, creator: item.creator, year: item.year, progressTotal: item.progressTotal, description: item.description, cover: item.cover, accent: item.accent })),
-    [type, query]
+      .map((item) => ({ key: `catalog-${item.apiId}`, type: item.type, apiId: item.apiId, title: item.title, creator: item.creator, year: item.year, progressTotal: item.progressTotal, description: item.description, cover: item.cover, accent: item.accent, coverUrl: catalogCovers[item.apiId] })),
+    [type, query, catalogCovers]
   );
 
   // On the All tab, fill in titles the live search can't reach yet (movies,
@@ -117,7 +140,7 @@ export default function DiscoverPage() {
   const liveCards: Card[] = liveResults.map((r) => ({ key: `${r.source}-${r.apiId}`, type: r.type, apiId: r.apiId, source: r.source, title: r.title, creator: r.creator, year: r.year, progressTotal: r.progressTotal, description: r.description, coverUrl: r.coverUrl }));
 
   const cards = useLive ? [...liveCards, ...catalogFallbackCards] : catalogCards;
-  const keyGated = type !== "all" && !liveTypes.includes(type) && query.trim().length > 0;
+  const keyGated = type !== "all" && !liveTypes.includes(type);
 
   const add = useCallback(async (card: Card, favorite = false) => {
     if (!session) { setView("login"); return; }
