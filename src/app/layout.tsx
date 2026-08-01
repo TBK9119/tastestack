@@ -39,6 +39,7 @@ export const metadata: Metadata = {
     googleBot: { index: true, follow: true, "max-image-preview": "large" },
   },
   alternates: { canonical: siteUrl },
+  verification: { google: "npj9IGtW2S7owAZjdM-Z3Ux0aKATtiNL0Iabm5ehGHM" },
   icons: { icon: "/logo.svg", shortcut: "/logo.svg", apple: "/logo.svg" },
   openGraph: {
     type: "website",
