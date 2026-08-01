@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAppStore, type View } from "@/store/app-store";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { Sun, Moon } from "lucide-react";
@@ -22,29 +23,29 @@ function ThemeToggle() {
 }
 
 export default function Navbar() {
-  const { view, setView, setViewProfileUsername } = useAppStore();
+  const pathname = usePathname();
   const { data: session, status } = useSession();
 
-  const navLink = (target: View, label: string) => (
-    <button
-      onClick={() => setView(target)}
-      className={`text-sm font-medium transition-colors ${view === target ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+  const navLink = (href: string, label: string) => (
+    <Link
+      href={href}
+      className={`text-sm font-medium transition-colors ${pathname === href ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
     >
       {label}
-    </button>
+    </Link>
   );
 
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
       <nav className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-6">
-        <button onClick={() => setView(session ? "discover" : "landing")} className="text-xl font-extrabold tracking-tight text-primary">
+        <Link href={session ? "/discover" : "/"} className="text-xl font-extrabold tracking-tight text-primary">
           Taste<span className="text-foreground">Stack</span>
-        </button>
+        </Link>
 
         <div className="hidden md:flex items-center gap-5">
-          {navLink("discover", "Discover")}
-          {session && navLink("feed", "Feed")}
-          {session && navLink("lists", "Lists")}
+          {navLink("/discover", "Discover")}
+          {session && navLink("/feed", "Feed")}
+          {session && navLink("/lists", "Lists")}
         </div>
 
         <div className="ml-auto flex items-center gap-3">
@@ -53,21 +54,18 @@ export default function Navbar() {
             <span className="text-muted-foreground text-sm">…</span>
           ) : session?.user ? (
             <>
-              <button
-                onClick={() => { setViewProfileUsername(session.user.username); setView("public-profile"); }}
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
+              <Link href={`/profile/${session.user.username}`} className="text-sm text-muted-foreground hover:text-foreground">
                 @{session.user.username}
-              </button>
-              {navLink("settings", "Settings")}
+              </Link>
+              {navLink("/settings", "Settings")}
               <Button variant="outline" size="sm" onClick={() => signOut({ callbackUrl: "/" })}>
                 Logout
               </Button>
             </>
           ) : (
             <>
-              <Button variant="outline" size="sm" onClick={() => setView("login")}>Login</Button>
-              <Button size="sm" onClick={() => setView("signup")}>Sign up</Button>
+              <Button variant="outline" size="sm" asChild><Link href="/login">Login</Link></Button>
+              <Button size="sm" asChild><Link href="/signup">Sign up</Link></Button>
             </>
           )}
         </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { useAppStore } from "@/store/app-store";
+import { useRouter } from "next/navigation";
 import { TYPE_ICONS, type MediaType } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -59,7 +59,7 @@ function SortableEntry({ entry, isOwn, onRemove }: { entry: ListEntryData; isOwn
 
 export default function ListsPage() {
   const { data: session } = useSession();
-  const { setView } = useAppStore();
+  const router = useRouter();
   const [lists, setLists] = useState<ListSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [openList, setOpenList] = useState<ListDetail | null>(null);
@@ -201,7 +201,7 @@ export default function ListsPage() {
     <div className="max-w-lg mx-auto px-5 py-16 text-center">
       <h1 className="text-3xl font-black">Curate your own lists.</h1>
       <p className="mt-3 text-muted-foreground">Log in to build collections like &quot;Best sci-fi of the decade&quot; or &quot;Comfort rewatches.&quot;</p>
-      <Button className="mt-6" onClick={() => setView("login")}>Log in</Button>
+      <Button className="mt-6" onClick={() => router.push("/login")}>Log in</Button>
     </div>
   );
 

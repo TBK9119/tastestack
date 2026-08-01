@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAppStore } from "@/store/app-store";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 
 export default function SignupPage() {
-  const { setView } = useAppStore();
+  const router = useRouter();
   const [form, setForm] = useState({ email: "", username: "", displayName: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,7 +31,7 @@ export default function SignupPage() {
       const result = await signIn("credentials", { email: form.email, password: form.password, redirect: false });
       if (result?.error) throw new Error("Account created, please log in");
       toast({ title: "Welcome to TasteStack!", description: "Your profile is ready." });
-      setView("discover");
+      router.push("/discover");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -70,7 +71,7 @@ export default function SignupPage() {
           </form>
           <p className="text-center text-sm text-muted-foreground mt-4">
             Already have an account?{" "}
-            <button onClick={() => setView("login")} className="text-primary hover:underline font-medium">Log in</button>
+            <Link href="/login" className="text-primary hover:underline font-medium">Log in</Link>
           </p>
         </CardContent>
       </Card>

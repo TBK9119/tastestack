@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { useAppStore } from "@/store/app-store";
+import { useRouter } from "next/navigation";
 import { CATALOG, catalogSourceForType } from "@/lib/catalog";
 import { MEDIA_TYPES, TYPE_ICONS, type MediaType, mediaConfig } from "@/lib/constants";
 import type { NormalizedResult } from "@/lib/api/anilist";
@@ -29,7 +29,7 @@ const SORT_OPTIONS: Array<{ value: string; label: string }> = [
 
 export default function DiscoverPage() {
   const { data: session } = useSession();
-  const { setView, user } = useAppStore();
+  const router = useRouter();
   const [type, setType] = useState<"all" | MediaType>("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("trending");
@@ -143,7 +143,7 @@ export default function DiscoverPage() {
   const keyGated = type !== "all" && !liveTypes.includes(type);
 
   const add = useCallback(async (card: Card, favorite = false) => {
-    if (!session) { setView("login"); return; }
+    if (!session) { router.push("/login"); return; }
     setAdding(`${card.apiId}-${favorite}`);
     const payload = card.source
       ? { type: card.type, apiId: card.apiId, source: card.source, title: card.title, creator: card.creator, year: card.year, coverUrl: card.coverUrl, progressTotal: card.progressTotal, favorite }
@@ -159,10 +159,10 @@ export default function DiscoverPage() {
       toast({ title: "Could not add title", description: data.error, variant: "destructive" });
     }
     setAdding(null);
-  }, [session, setView, toast, keyFor]);
+  }, [session, router, toast, keyFor]);
 
   const addToList = useCallback(async (listId: string, card: Card) => {
-    if (!session) { setView("login"); return; }
+    if (!session) { router.push("/login"); return; }
     const payload = card.source
       ? { type: card.type, apiId: card.apiId, source: card.source, title: card.title, creator: card.creator, year: card.year, coverUrl: card.coverUrl }
       : { apiId: card.apiId };
@@ -175,7 +175,7 @@ export default function DiscoverPage() {
       const already = data.error === "Already in this list.";
       toast({ title: already ? `Already in "${listName}"` : "Could not add to list", description: already ? undefined : data.error, variant: already ? "default" : "destructive" });
     }
-  }, [session, setView, toast, lists]);
+  }, [session, router, toast, lists]);
 
   const quickCreateList = useCallback(async (card: Card) => {
     const name = newListName.trim();

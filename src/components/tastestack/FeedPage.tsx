@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useAppStore, type ActivityEntry } from "@/store/app-store";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { type ActivityEntry } from "@/store/app-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -10,7 +12,7 @@ const ACTION_LABEL: Record<string, string> = { added: "added", rated: "rated", c
 
 export default function FeedPage() {
   const { data: session } = useSession();
-  const { setView } = useAppStore();
+  const router = useRouter();
   const [activities, setActivities] = useState<ActivityEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const hasFetched = useRef(false);
@@ -25,7 +27,7 @@ export default function FeedPage() {
     <div className="max-w-3xl mx-auto px-5 py-16 text-center">
       <h1 className="text-3xl font-black">Your feed is waiting.</h1>
       <p className="mt-3 text-muted-foreground">Log in to see activity from people whose taste you follow.</p>
-      <Button className="mt-6" onClick={() => setView("login")}>Log in</Button>
+      <Button className="mt-6" onClick={() => router.push("/login")}>Log in</Button>
     </div>
   );
 
@@ -60,8 +62,8 @@ export default function FeedPage() {
                   </div>
                   <div>
                     <p className="text-sm">
-                      <button onClick={() => { useAppStore.getState().setViewProfileUsername(activity.user.username); useAppStore.getState().setView("public-profile"); }}
-                        className="font-bold hover:text-primary">{isSelf ? "You" : activity.user.displayName}</button>{" "}
+                      <Link href={`/profile/${activity.user.username}`}
+                        className="font-bold hover:text-primary">{isSelf ? "You" : activity.user.displayName}</Link>{" "}
                       {ACTION_LABEL[activity.action] || activity.action}{" "}
                       {activity.item ? <span className="font-semibold text-primary">{activity.item.title}</span> : "a title"}
                     </p>
@@ -78,7 +80,7 @@ export default function FeedPage() {
             <div className="text-3xl">⌁</div>
             <h2 className="mt-4 font-bold">Nothing here yet.</h2>
             <p className="mt-2 text-sm text-muted-foreground">Titles you add, and titles people you follow add, will show up here.</p>
-            <Button className="mt-5" onClick={() => setView("discover")}>Find something to add</Button>
+            <Button className="mt-5" onClick={() => router.push("/discover")}>Find something to add</Button>
           </CardContent>
         </Card>
       )}

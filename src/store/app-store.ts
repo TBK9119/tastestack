@@ -1,8 +1,7 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
 import type { MediaType, ItemStatus } from "@/lib/constants";
 
-export type View = "landing" | "login" | "signup" | "discover" | "profile" | "public-profile" | "feed" | "settings" | "lists";
+export type { MediaType, ItemStatus };
 
 export interface User {
   id: string;
@@ -58,38 +57,23 @@ export interface ActivityEntry {
   createdAt: string;
 }
 
+// NOTE: "Which page am I on" used to live here (a `view` field persisted to
+// sessionStorage) because the whole app was a single client-rendered route.
+// Now that every page is a real Next.js URL (see src/app/*), the URL itself
+// is the source of truth for navigation — the browser already handles that
+// state for us, and it's shareable/crawlable for free. This store only
+// holds the signed-in user, mirrored from NextAuth's session by AuthProvider
+// so components can read it without calling useSession() everywhere.
 interface AppState {
-  // Navigation
-  view: View;
-  setView: (view: View) => void;
-  viewProfileUsername: string | null;
-  setViewProfileUsername: (username: string | null) => void;
-
-  // Auth
   user: User | null;
   setUser: (user: User | null) => void;
   loading: boolean;
   setLoading: (loading: boolean) => void;
 }
 
-export const useAppStore = create<AppState>()(
-  persist(
-    (set) => ({
-      view: "landing",
-      setView: (view) => set({ view }),
-      viewProfileUsername: null,
-      setViewProfileUsername: (username) => set({ viewProfileUsername: username }),
-      user: null,
-      setUser: (user) => set({ user }),
-      loading: true,
-      setLoading: (loading) => set({ loading }),
-    }),
-    {
-      name: "tastestack-view",
-      storage: createJSONStorage(() => sessionStorage),
-      // Only the "which page am I on" bits survive a reload — user/session
-      // data always comes fresh from NextAuth via AuthProvider, never cached.
-      partialize: (state) => ({ view: state.view, viewProfileUsername: state.viewProfileUsername }),
-    }
-  )
-);
+export const useAppStore = create<AppState>()((set) => ({
+  user: null,
+  setUser: (user) => set({ user }),
+  loading: true,
+  setLoading: (loading) => set({ loading }),
+}));

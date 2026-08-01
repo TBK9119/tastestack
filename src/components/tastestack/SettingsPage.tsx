@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useAppStore } from "@/store/app-store";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,7 +45,7 @@ function resizeImageToDataUrl(file: File, maxSize = 256, quality = 0.82): Promis
 
 export default function SettingsPage() {
   const { data: session, update } = useSession();
-  const { user, setView } = useAppStore();
+  const router = useRouter();
   const [form, setForm] = useState({ username: "", displayName: "", bio: "", avatarUrl: "", bannerColor: "#2e51a2", isPublic: true });
   const [state, setState] = useState("");
   const [avatarBusy, setAvatarBusy] = useState(false);
@@ -87,7 +87,7 @@ export default function SettingsPage() {
     <div className="max-w-lg mx-auto px-5 py-16 text-center">
       <h1 className="text-3xl font-black">Make it yours.</h1>
       <p className="mt-3 text-muted-foreground">Log in to edit your TasteStack profile.</p>
-      <Button className="mt-6" onClick={() => setView("login")}>Log in</Button>
+      <Button className="mt-6" onClick={() => router.push("/login")}>Log in</Button>
     </div>
   );
 
@@ -150,7 +150,7 @@ export default function SettingsPage() {
           {state && <p className="rounded-lg bg-primary/10 px-4 py-3 text-sm text-primary">{state}</p>}
           <div className="flex flex-wrap items-center gap-3 pt-1">
             <Button type="submit">Save changes</Button>
-            <Button type="button" variant="outline" onClick={() => { useAppStore.getState().setViewProfileUsername(user?.username || ""); setView("public-profile"); }}>View profile</Button>
+            <Button type="button" variant="outline" onClick={() => router.push(`/profile/${form.username}`)}>View profile</Button>
           </div>
         </CardContent></Card>
       </form>

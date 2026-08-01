@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAppStore } from "@/store/app-store";
+import Link from "next/link";
 import { CATALOG } from "@/lib/catalog";
 import { Button } from "@/components/ui/button";
 import CoverImage from "@/components/tastestack/CoverImage";
 
 export default function LandingPage() {
-  const { setView } = useAppStore();
   // Starts as the curated icon tiles (identical to before) and swaps in real
   // cover art from the same trending endpoints Discover uses, once it loads.
   // Same sources, same attribution already in the footer — nothing here is
@@ -44,8 +43,8 @@ export default function LandingPage() {
               TasteStack is your personal culture shelf. Track the anime you&apos;re watching, films you&apos;ve loved, games you&apos;ve finished, albums on repeat, and books still calling your name.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button onClick={() => setView("signup")} size="lg">Start your stack →</Button>
-              <Button onClick={() => setView("discover")} variant="outline" size="lg">Explore picks</Button>
+              <Button size="lg" asChild><Link href="/signup">Start your stack →</Link></Button>
+              <Button variant="outline" size="lg" asChild><Link href="/discover">Explore picks</Link></Button>
             </div>
             <div className="mt-9 flex items-center gap-5 text-sm text-muted-foreground">
               <span><b className="text-foreground">7</b> media worlds</span>
@@ -110,7 +109,7 @@ export default function LandingPage() {
         <p className="mt-4 mx-auto max-w-lg text-muted-foreground">
           Add a title, give it a score, mark your progress, and let your profile tell the story.
         </p>
-        <Button onClick={() => setView("signup")} size="lg" className="mt-8">Create a free profile</Button>
+        <Button size="lg" className="mt-8" asChild><Link href="/signup">Create a free profile</Link></Button>
       </section>
     </div>
   );

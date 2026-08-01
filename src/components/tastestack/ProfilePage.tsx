@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useAppStore, type ProfileData, type ItemData, type MediaType } from "@/store/app-store";
 import { MEDIA_TYPES, STATUS_META, TYPE_ICONS, mediaConfig } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
@@ -59,9 +60,10 @@ function StatusSection({ title, items, isOwn, onEdit, progressLabel }: {
   );
 }
 
-export default function ProfilePage() {
+export default function ProfilePage({ username: routeUsername }: { username?: string }) {
   const { data: session } = useSession();
-  const { viewProfileUsername, setView, user } = useAppStore();
+  const router = useRouter();
+  const { user } = useAppStore();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [items, setItems] = useState<ItemData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,7 +73,7 @@ export default function ProfilePage() {
   const { toast } = useToast();
 
   const fetchProfile = useCallback(async () => {
-    const username = viewProfileUsername || user?.username;
+    const username = routeUsername || user?.username;
     if (!username) return;
     setLoading(true);
     try {
@@ -86,7 +88,7 @@ export default function ProfilePage() {
       }
     } catch { /* ignore */ }
     finally { setLoading(false); }
-  }, [viewProfileUsername, user]);
+  }, [routeUsername, user]);
 
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
 
@@ -157,7 +159,7 @@ export default function ProfilePage() {
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-3xl font-black tracking-tight">{profile.displayName}</h1>
                 {isOwn ? (
-                  <Button variant="outline" size="sm" onClick={() => setView("settings")}>Edit profile</Button>
+                  <Button variant="outline" size="sm" onClick={() => router.push("/settings")}>Edit profile</Button>
                 ) : session?.user ? (
                   profile.isFollowing ? (
                     <Button variant="outline" size="sm" onClick={unfollow} className="hover:text-destructive hover:border-destructive">Following</Button>
@@ -165,7 +167,7 @@ export default function ProfilePage() {
                     <Button size="sm" onClick={follow}>+ Follow</Button>
                   )
                 ) : (
-                  <Button variant="outline" size="sm" onClick={() => setView("login")}>Log in to follow</Button>
+                  <Button variant="outline" size="sm" onClick={() => router.push("/login")}>Log in to follow</Button>
                 )}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">@{profile.username}</p>
@@ -188,7 +190,7 @@ export default function ProfilePage() {
               <div className="text-4xl">✦</div>
               <h2 className="mt-4 text-xl font-bold">This stack is just getting started.</h2>
               <p className="mt-2 text-muted-foreground">Add titles from Discover to build your profile.</p>
-              {isOwn && <Button className="mt-6" onClick={() => setView("discover")}>Discover titles</Button>}
+              {isOwn && <Button className="mt-6" onClick={() => router.push("/discover")}>Discover titles</Button>}
             </CardContent>
           </Card>
         ) : (
