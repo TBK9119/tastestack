@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
@@ -13,8 +14,16 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null;
+
+        // 10 attempts/minute/IP. Keyed on IP rather than the submitted email
+        // so someone can't lock a real user out just by repeatedly guessing
+        // their address — and a single scripted attacker is still capped.
+        const ip = clientIp(req?.headers || {});
+        const limit = rateLimit(`login:${ip}`, 10, 60 * 1000);
+        if (!limit.ok) return null;
+
         const user = await db.user.findUnique({ where: { email: credentials.email.toLowerCase() } });
         if (!user) return null;
         const ok = await bcrypt.compare(credentials.password, user.passwordHash);

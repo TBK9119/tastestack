@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = clientIp(request.headers);
+    const limit = rateLimit(`signup:${ip}`, 5, 10 * 60 * 1000); // 5 signups / 10 min / IP
+    if (!limit.ok) {
+      return NextResponse.json({ error: "Too many signup attempts. Please try again in a few minutes." }, { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } });
+    }
+
     const body = await request.json();
     const { email, username, displayName, password } = body;
 
