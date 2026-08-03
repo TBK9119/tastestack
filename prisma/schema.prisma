@@ -22,13 +22,14 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  items      Item[]
-  lists      List[]
-  activities Activity[]
-  followers  Follow[]  @relation("Following")
-  following  Follow[]  @relation("Follower")
-  sessions   Session[]
-  accounts   Account[]
+  items            Item[]
+  lists            List[]
+  activities       Activity[]
+  followers        Follow[]          @relation("Following")
+  following        Follow[]          @relation("Follower")
+  sessions         Session[]
+  accounts         Account[]
+  listInteractions ListInteraction[]
 
   @@map("users")
 }
@@ -72,7 +73,8 @@ model List {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  entries ListEntry[]
+  entries      ListEntry[]
+  interactions ListInteraction[]
 
   @@index([userId])
   @@map("lists")
@@ -100,6 +102,27 @@ model ListEntry {
   @@unique([listId, type, apiId, source])
   @@index([listId])
   @@map("list_entries")
+}
+
+// ---------- List interactions: like / favourite / bookmark ----------
+enum ListInteractionType {
+  LIKE
+  FAVORITE
+  BOOKMARK
+}
+
+model ListInteraction {
+  id        String              @id @default(cuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listId    String
+  list      List                @relation(fields: [listId], references: [id], onDelete: Cascade)
+  type      ListInteractionType
+  createdAt DateTime            @default(now())
+
+  @@unique([userId, listId, type])
+  @@index([listId, type])
+  @@map("list_interactions")
 }
 
 // ---------- Social: follow graph ----------

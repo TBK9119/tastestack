@@ -32,7 +32,32 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ lists });
+  const listIds = lists.map((l) => l.id);
+  const [grouped, viewerRows] = await Promise.all([
+    listIds.length ? db.listInteraction.groupBy({ by: ["listId", "type"], where: { listId: { in: listIds } }, _count: true }) : Promise.resolve([]),
+    session?.user?.id && listIds.length
+      ? db.listInteraction.findMany({ where: { userId: session.user.id, listId: { in: listIds } }, select: { listId: true, type: true } })
+      : Promise.resolve([]),
+  ]);
+
+  const countsByList: Record<string, { LIKE: number; FAVORITE: number; BOOKMARK: number }> = {};
+  for (const row of grouped) {
+    countsByList[row.listId] ||= { LIKE: 0, FAVORITE: 0, BOOKMARK: 0 };
+    countsByList[row.listId][row.type] = row._count;
+  }
+  const viewerByList: Record<string, { LIKE: boolean; FAVORITE: boolean; BOOKMARK: boolean }> = {};
+  for (const row of viewerRows) {
+    viewerByList[row.listId] ||= { LIKE: false, FAVORITE: false, BOOKMARK: false };
+    viewerByList[row.listId][row.type] = true;
+  }
+
+  const withInteractions = lists.map((list) => ({
+    ...list,
+    counts: countsByList[list.id] || { LIKE: 0, FAVORITE: 0, BOOKMARK: 0 },
+    viewerState: viewerByList[list.id] || { LIKE: false, FAVORITE: false, BOOKMARK: false },
+  }));
+
+  return NextResponse.json({ lists: withInteractions });
 }
 
 export async function POST(request: NextRequest) {

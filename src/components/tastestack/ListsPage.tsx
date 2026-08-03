@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type MouseEvent } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { TYPE_ICONS, type MediaType } from "@/lib/constants";
@@ -16,17 +16,76 @@ import CoverImage from "@/components/tastestack/CoverImage";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Heart, Star, Bookmark } from "lucide-react";
 
 interface ListEntryData {
   id: string; type: MediaType; apiId: string; source: string;
   title: string; coverUrl: string; year: string; extra: string; note: string; position: number;
 }
+interface InteractionCounts { LIKE: number; FAVORITE: number; BOOKMARK: number }
+interface InteractionState { LIKE: boolean; FAVORITE: boolean; BOOKMARK: boolean }
 interface ListSummary {
   id: string; name: string; description: string; isPublic: boolean; updatedAt: string;
   entries: ListEntryData[]; _count: { entries: number };
+  counts: InteractionCounts; viewerState: InteractionState;
 }
 interface ListDetail extends ListSummary {
   user: { username: string; displayName: string }; isOwn: boolean;
+}
+
+// Shared like/favourite/bookmark control used on both the list grid cards
+// and the list detail header. Updates optimistically, then reconciles with
+// the server's authoritative counts (and reverts on failure).
+function InteractionBar({ listId, counts, viewerState, onChange, size = "sm" }: {
+  listId: string; counts: InteractionCounts; viewerState: InteractionState;
+  onChange: (counts: InteractionCounts, viewerState: InteractionState) => void;
+  size?: "sm" | "md";
+}) {
+  const { data: session } = useSession();
+  const router = useRouter();
+  const [pending, setPending] = useState<string | null>(null);
+
+  const toggle = async (type: keyof InteractionCounts, e: MouseEvent) => {
+    e.stopPropagation();
+    if (!session) { router.push("/login"); return; }
+    if (pending) return;
+    setPending(type);
+    const wasActive = viewerState[type];
+    const optimisticCounts = { ...counts, [type]: Math.max(0, counts[type] + (wasActive ? -1 : 1)) };
+    const optimisticViewer = { ...viewerState, [type]: !wasActive };
+    onChange(optimisticCounts, optimisticViewer);
+    try {
+      const res = await fetch(`/api/lists/${listId}/interactions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type }) });
+      if (res.ok) {
+        const data = await res.json();
+        onChange(data.counts, { ...optimisticViewer, [type]: data.active });
+      } else {
+        onChange(counts, viewerState);
+      }
+    } catch {
+      onChange(counts, viewerState);
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const iconSize = size === "sm" ? 14 : 17;
+  const gap = size === "sm" ? "gap-3" : "gap-4";
+  const textSize = size === "sm" ? "text-xs" : "text-sm";
+
+  return (
+    <div className={`flex items-center ${gap}`}>
+      <button onClick={(e) => toggle("LIKE", e)} title="Like" className={`flex items-center gap-1 ${textSize} font-medium transition ${viewerState.LIKE ? "text-red-500" : "text-muted-foreground hover:text-foreground"}`}>
+        <Heart size={iconSize} fill={viewerState.LIKE ? "currentColor" : "none"} /> {counts.LIKE}
+      </button>
+      <button onClick={(e) => toggle("FAVORITE", e)} title="Favourite" className={`flex items-center gap-1 ${textSize} font-medium transition ${viewerState.FAVORITE ? "text-yellow-500" : "text-muted-foreground hover:text-foreground"}`}>
+        <Star size={iconSize} fill={viewerState.FAVORITE ? "currentColor" : "none"} /> {counts.FAVORITE}
+      </button>
+      <button onClick={(e) => toggle("BOOKMARK", e)} title="Bookmark" className={`flex items-center gap-1 ${textSize} font-medium transition ${viewerState.BOOKMARK ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+        <Bookmark size={iconSize} fill={viewerState.BOOKMARK ? "currentColor" : "none"} /> {counts.BOOKMARK}
+      </button>
+    </div>
+  );
 }
 
 function parseExtra(extra: string) {
@@ -219,6 +278,15 @@ export default function ListsPage() {
             </div>
             {openList.description && <p className="mt-2 max-w-xl text-muted-foreground">{openList.description}</p>}
             <p className="mt-1 text-xs text-muted-foreground">by @{openList.user.username} · {openList.entries.length} title{openList.entries.length === 1 ? "" : "s"}</p>
+            <div className="mt-3">
+              <InteractionBar
+                listId={openList.id}
+                counts={openList.counts}
+                viewerState={openList.viewerState}
+                size="md"
+                onChange={(counts, viewerState) => setOpenList((prev) => prev ? { ...prev, counts, viewerState } : prev)}
+              />
+            </div>
           </div>
           {openList.isOwn && (
             <div className="flex gap-2">
@@ -347,6 +415,14 @@ export default function ListsPage() {
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">{list._count.entries} title{list._count.entries === 1 ? "" : "s"}</p>
                   {list.description && <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{list.description}</p>}
+                  <div className="mt-3 pt-3 border-t">
+                    <InteractionBar
+                      listId={list.id}
+                      counts={list.counts}
+                      viewerState={list.viewerState}
+                      onChange={(counts, viewerState) => setLists((prev) => prev.map((l) => (l.id === list.id ? { ...l, counts, viewerState } : l)))}
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>

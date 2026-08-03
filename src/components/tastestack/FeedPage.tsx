@@ -1,29 +1,76 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ActivityEntry } from "@/store/app-store";
+import { TYPE_ICONS, type MediaType } from "@/lib/constants";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import CoverImage from "@/components/tastestack/CoverImage";
 
 const ACTION_LABEL: Record<string, string> = { added: "added", rated: "rated", completed: "finished", favorited: "favourited", reviewed: "reviewed" };
 
-export default function FeedPage() {
+function parseExtra(extra: string) {
+  try { return JSON.parse(extra) as { accent?: string; cover?: string }; } catch { return {}; }
+}
+
+function ActivitySkeletonRow() {
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-4 p-4">
+        <div className="h-11 w-11 rounded-xl bg-muted shrink-0" />
+        <div className="space-y-2 flex-1">
+          <div className="h-3.5 w-2/3 rounded bg-muted" />
+          <div className="h-3 w-1/4 rounded bg-muted" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function FeedPage({ initialActivities = [], initialCursor = null, loggedIn = false }: {
+  initialActivities?: ActivityEntry[];
+  initialCursor?: string | null;
+  loggedIn?: boolean;
+}) {
   const { data: session } = useSession();
   const router = useRouter();
-  const [activities, setActivities] = useState<ActivityEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const hasFetched = useRef(false);
+  const [activities, setActivities] = useState<ActivityEntry[]>(initialActivities);
+  const [cursor, setCursor] = useState<string | null>(initialCursor);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [done, setDone] = useState(initialCursor === null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const loadingRef = useRef(false);
 
+  const loadMore = useCallback(async () => {
+    if (loadingRef.current || done || !cursor) return;
+    loadingRef.current = true;
+    setLoadingMore(true);
+    try {
+      const res = await fetch(`/api/activity?cursor=${encodeURIComponent(cursor)}`);
+      const data = await res.json();
+      setActivities((prev) => [...prev, ...(Array.isArray(data.activities) ? data.activities : [])]);
+      setCursor(data.nextCursor || null);
+      if (!data.nextCursor) setDone(true);
+    } catch { /* ignore, sentinel stays in view so the next scroll retries */ }
+    finally { loadingRef.current = false; setLoadingMore(false); }
+  }, [cursor, done]);
+
+  // Infinite scroll: observe a sentinel just past the last card, fetch the
+  // next page once it's ~400px from entering the viewport.
   useEffect(() => {
-    if (!session || hasFetched.current) return;
-    hasFetched.current = true;
-    fetch("/api/activity").then((r) => r.json()).then((data) => setActivities(data.activities || [])).catch(() => {}).finally(() => setLoading(false));
-  }, [session]);
+    if (done || !sentinelRef.current) return;
+    const el = sentinelRef.current;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) loadMore();
+    }, { rootMargin: "400px" });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadMore, done]);
 
-  if (!session) return (
+  if (!loggedIn) return (
     <div className="max-w-3xl mx-auto px-5 py-16 text-center">
       <h1 className="text-3xl font-black">Your feed is waiting.</h1>
       <p className="mt-3 text-muted-foreground">Log in to see activity from people whose taste you follow.</p>
@@ -36,31 +83,31 @@ export default function FeedPage() {
       <p className="text-xs font-bold tracking-[.18em] text-primary">ACTIVITY</p>
       <h1 className="mt-3 text-3xl font-black">Your taste, in motion.</h1>
 
-      {loading ? (
-        <div className="mt-8 space-y-3 animate-pulse">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Card key={i}>
-              <CardContent className="flex items-center gap-4 p-4">
-                <div className="h-11 w-11 rounded-xl bg-muted shrink-0" />
-                <div className="space-y-2 flex-1">
-                  <div className="h-3.5 w-2/3 rounded bg-muted" />
-                  <div className="h-3 w-1/4 rounded bg-muted" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : activities.length ? (
+      {activities.length ? (
         <div className="mt-8 space-y-3">
           {activities.map((activity) => {
-            const isSelf = activity.userId === session.user?.id;
+            const isSelf = activity.userId === session?.user?.id;
+            const extra = activity.item ? parseExtra(activity.item.extra) : {};
             return (
               <Card key={activity.id}>
                 <CardContent className="flex items-center gap-4 p-4">
-                  <div className="h-11 w-11 rounded-xl bg-primary/15 text-primary grid place-items-center shrink-0">
-                    {activity.action === "added" ? "+" : "✦"}
-                  </div>
-                  <div>
+                  {activity.item ? (
+                    <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border">
+                      <CoverImage
+                        src={activity.item.coverUrl}
+                        alt={activity.item.title}
+                        icon={extra.cover || TYPE_ICONS[activity.item.type as MediaType]}
+                        accent={extra.accent}
+                        sizes="44px"
+                        fallbackClassName="p-1.5 text-base"
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-11 w-11 rounded-xl bg-primary/15 text-primary grid place-items-center shrink-0">
+                      {activity.action === "added" ? "+" : "✦"}
+                    </div>
+                  )}
+                  <div className="min-w-0">
                     <p className="text-sm">
                       <Link href={`/profile/${activity.user.username}`}
                         className="font-bold hover:text-primary">{isSelf ? "You" : activity.user.displayName}</Link>{" "}
@@ -73,6 +120,15 @@ export default function FeedPage() {
               </Card>
             );
           })}
+
+          {!done && (
+            <div ref={sentinelRef} className="space-y-3 pt-1">
+              {loadingMore && Array.from({ length: 3 }).map((_, i) => <ActivitySkeletonRow key={i} />)}
+            </div>
+          )}
+          {done && activities.length > 0 && (
+            <p className="pt-4 text-center text-xs text-muted-foreground">You&apos;re all caught up.</p>
+          )}
         </div>
       ) : (
         <Card className="mt-8 py-14 text-center">

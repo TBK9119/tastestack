@@ -19,7 +19,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const isOwn = Boolean(session?.user?.id && list.userId === session.user.id);
   if (!list.isPublic && !isOwn) return NextResponse.json({ error: "List not found." }, { status: 404 });
 
-  return NextResponse.json({ list: { ...list, isOwn } });
+  const [grouped, viewerRows] = await Promise.all([
+    db.listInteraction.groupBy({ by: ["type"], where: { listId: id }, _count: true }),
+    session?.user?.id
+      ? db.listInteraction.findMany({ where: { userId: session.user.id, listId: id }, select: { type: true } })
+      : Promise.resolve([]),
+  ]);
+  const counts = { LIKE: 0, FAVORITE: 0, BOOKMARK: 0 };
+  for (const row of grouped) counts[row.type] = row._count;
+  const viewerState = { LIKE: false, FAVORITE: false, BOOKMARK: false };
+  for (const row of viewerRows) viewerState[row.type] = true;
+
+  return NextResponse.json({ list: { ...list, isOwn, counts, viewerState } });
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

@@ -12,12 +12,63 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import CoverImage from "@/components/tastestack/CoverImage";
 import { useToast } from "@/hooks/use-toast";
+import { Sparkles } from "lucide-react";
 
 type Card = {
   key: string; type: MediaType; apiId: string; source?: string;
   title: string; creator: string; year: string; progressTotal: number;
   description: string; cover?: string; accent?: string; coverUrl?: string;
 };
+
+interface RecItem {
+  type: MediaType; apiId: string; source: string;
+  title: string; creator: string; year: string; coverUrl: string; reason: string;
+}
+
+function recKey(r: { type: MediaType; source: string; apiId: string }) {
+  return `${r.type}:${r.source}:${r.apiId}`;
+}
+
+// A horizontally-scrolling row of poster cards for one recommendation
+// category. Kept at module scope (not nested in DiscoverPage) so its
+// component identity is stable across re-renders — nesting it inside the
+// page component would remount this whole row (and re-flicker every cover
+// image) on every keystroke in the search box.
+function RecRow({ title, items, addedKeys, adding, onAdd }: {
+  title: string; items: RecItem[]; addedKeys: Set<string>; adding: string | null;
+  onAdd: (r: RecItem) => void;
+}) {
+  if (!items.length) return null;
+  return (
+    <div className="mt-6 first:mt-0">
+      <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{title}</h3>
+      <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
+        {items.map((r) => {
+          const key = recKey(r);
+          const already = addedKeys.has(key);
+          const isAdding = adding === `${r.apiId}-false`;
+          return (
+            <div key={key} className="group relative w-28 shrink-0">
+              <div className="relative aspect-[3/4] overflow-hidden rounded-lg border">
+                <CoverImage src={r.coverUrl} alt={r.title} icon={TYPE_ICONS[r.type]} sizes="112px" fallbackClassName="p-2" />
+                <button
+                  onClick={() => onAdd(r)}
+                  disabled={already || isAdding}
+                  title={already ? "In your stack" : "Add to stack"}
+                  className={`absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full text-xs backdrop-blur transition ${already ? "bg-primary text-primary-foreground" : "bg-black/70 text-white opacity-0 group-hover:opacity-100"}`}
+                >
+                  {isAdding ? "…" : already ? "✓" : "+"}
+                </button>
+              </div>
+              <p className="mt-1.5 truncate text-xs font-semibold">{r.title}</p>
+              <p className="truncate text-[11px] text-muted-foreground">{r.creator} · {r.year}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const TABS: Array<"all" | MediaType> = ["all", "anime", "manga", "movie", "tv", "game", "album", "book"];
 const TRENDING_TYPES = ["anime", "manga", "book"];
@@ -42,6 +93,7 @@ export default function DiscoverPage() {
   const [favoritedKeys, setFavoritedKeys] = useState<Set<string>>(new Set());
   const [lists, setLists] = useState<{ id: string; name: string }[]>([]);
   const [newListName, setNewListName] = useState("");
+  const [recs, setRecs] = useState<{ social: RecItem[]; community: RecItem[]; forYou: RecItem[] } | null>(null);
   const { toast } = useToast();
 
   // A card's identity in the database is (type, source, apiId) — catalog
@@ -96,6 +148,14 @@ export default function DiscoverPage() {
       .then((r) => r.json())
       .then((data) => { if (Array.isArray(data.lists)) setLists(data.lists.map((l: any) => ({ id: l.id, name: l.name }))); })
       .catch(() => {});
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) { setRecs(null); return; }
+    fetch("/api/recommendations")
+      .then((r) => r.json())
+      .then((data) => setRecs(data))
+      .catch(() => setRecs(null));
   }, [session]);
 
   const isLiveTab = type !== "all" && liveTypes.includes(type);
@@ -191,6 +251,10 @@ export default function DiscoverPage() {
     }
   }, [newListName, addToList, toast]);
 
+  const addRec = useCallback((r: RecItem) => {
+    add({ key: recKey(r), type: r.type, apiId: r.apiId, source: r.source, title: r.title, creator: r.creator, year: r.year, progressTotal: 0, description: "", coverUrl: r.coverUrl });
+  }, [add]);
+
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10 sm:py-14">
       <div className="max-w-2xl">
@@ -198,6 +262,18 @@ export default function DiscoverPage() {
         <h1 className="mt-3 text-4xl font-black tracking-tight">Find your next favourite.</h1>
         <p className="mt-3 text-muted-foreground">Live-search anime, manga, and books — the All tab searches everything at once. Movies, TV, games, and music show a curated preview for now.</p>
       </div>
+
+      {session && !hasQuery && type === "all" && recs && (recs.forYou.length > 0 || recs.social.length > 0 || recs.community.length > 0) && (
+        <div className="mt-10 rounded-xl border bg-muted/40 p-5">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <p className="text-xs font-bold tracking-[.18em] text-primary">RECOMMENDED FOR YOU</p>
+          </div>
+          <RecRow title={recs.forYou[0]?.reason || "For you"} items={recs.forYou} addedKeys={addedKeys} adding={adding} onAdd={addRec} />
+          <RecRow title="Trending with people you follow" items={recs.social} addedKeys={addedKeys} adding={adding} onAdd={addRec} />
+          <RecRow title="Popular on TasteStack" items={recs.community} addedKeys={addedKeys} adding={adding} onAdd={addRec} />
+        </div>
+      )}
 
       <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex gap-2 overflow-x-auto pb-1">
