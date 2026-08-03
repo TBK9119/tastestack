@@ -78,12 +78,22 @@ async function fetchSortedAniList(kind: "anime" | "manga", sort: AniListSort, pe
       body: JSON.stringify({ query: SORTED_QUERY, variables: { type: kind.toUpperCase(), perPage, sort: [sort] } }),
       signal: controller.signal,
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      // Logged (not just swallowed) so an AniList outage or rate-limit shows
+      // up in Vercel's runtime logs instead of silently looking like "no
+      // results" to whoever's searching.
+      console.error(`AniList ${kind} fetch failed: HTTP ${res.status}`);
+      return [];
+    }
     const json = await res.json();
     const media = json?.data?.Page?.media;
-    if (!Array.isArray(media)) return [];
+    if (!Array.isArray(media)) {
+      if (json?.errors) console.error(`AniList ${kind} fetch returned errors:`, JSON.stringify(json.errors).slice(0, 500));
+      return [];
+    }
     return media.map((m: Record<string, any>) => mapMedia(m, kind));
-  } catch {
+  } catch (err) {
+    console.error(`AniList ${kind} fetch threw:`, err instanceof Error ? err.message : err);
     return [];
   } finally {
     clearTimeout(timeout);
@@ -112,7 +122,8 @@ export async function searchAniList(query: string, kind: "anime" | "manga"): Pro
       const media = json?.data?.Page?.media;
       if (Array.isArray(media)) primary = media.map((m: Record<string, any>) => mapMedia(m, kind));
     }
-  } catch {
+  } catch (err) {
+    console.error(`AniList search (${kind}) threw:`, err instanceof Error ? err.message : err);
     primary = [];
   } finally {
     clearTimeout(timeout);

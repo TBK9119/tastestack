@@ -41,7 +41,7 @@ export default function Navbar() {
       <nav className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-6">
         <Link href={session ? "/discover" : "/"} className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-primary">
           <img src="/logo.svg" alt="" width={24} height={24} className="shrink-0" />
-          Taste<span className="text-foreground">Stack</span>
+          <span>Taste<span className="text-foreground">Stack</span></span>
         </Link>
 
         <div className="hidden md:flex items-center gap-5">
