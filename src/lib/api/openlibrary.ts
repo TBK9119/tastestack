@@ -16,9 +16,14 @@ export async function searchOpenLibrary(query: string): Promise<NormalizedResult
     const json = await res.json();
     const docs = json?.docs;
     if (!Array.isArray(docs)) return [];
+    interface OLSResult {
+      title?: string; key?: string; author_name?: string[];
+      first_publish_year?: number; cover_i?: number;
+      number_of_pages_median?: number;
+    }
     return docs
-      .filter((d: any) => d?.title && d?.key)
-      .map((d: any) => ({
+      .filter((d: OLSResult) => d?.title && d?.key)
+      .map((d: OLSResult) => ({
         type: "book" as const,
         apiId: String(d.key).replace("/works/", ""),
         source: "openlibrary",
@@ -53,9 +58,13 @@ export async function fetchTrendingOpenLibrary(period: OpenLibraryTrendingPeriod
     const json = await res.json();
     const works = json?.works;
     if (!Array.isArray(works)) return [];
+    interface OLSTrendingResult {
+      title?: string; key?: string; author_name?: string[];
+      first_publish_year?: number; cover_i?: number;
+    }
     return works
-      .filter((w: any) => w?.title && w?.key)
-      .map((w: any) => ({
+      .filter((w: OLSTrendingResult) => w?.title && w?.key)
+      .map((w: OLSTrendingResult) => ({
         type: "book" as const,
         apiId: String(w.key).replace("/works/", ""),
         source: "openlibrary",

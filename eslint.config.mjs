@@ -9,16 +9,16 @@ const __dirname = dirname(__filename);
 const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
   rules: {
     // TypeScript rules
-    "@typescript-eslint/no-explicit-any": "off",
-    "@typescript-eslint/no-unused-vars": "off",
-    "@typescript-eslint/no-non-null-assertion": "off",
-    "@typescript-eslint/ban-ts-comment": "off",
-    "@typescript-eslint/prefer-as-const": "off",
-    "@typescript-eslint/no-unused-disable-directive": "off",
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/no-unused-vars": "error",
+    "@typescript-eslint/no-non-null-assertion": "warn",
+    "@typescript-eslint/ban-ts-comment": "warn",
+    "@typescript-eslint/prefer-as-const": "error",
     
     // React rules
     "react-hooks/exhaustive-deps": "off",
     "react-hooks/purity": "off",
+    "react-hooks/set-state-in-effect": "off",
     "react/no-unescaped-entities": "off",
     "react/display-name": "off",
     "react/prop-types": "off",

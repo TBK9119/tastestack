@@ -31,11 +31,14 @@ export async function searchLastFm(query: string): Promise<NormalizedResult[]> {
     const matches = json?.results?.albummatches?.album;
     const albums = Array.isArray(matches) ? matches : [];
 
+    interface LastFmImage { size: string; "#text": string; }
+    interface LastFmAlbum { name?: string; artist?: string; image?: LastFmImage[]; }
+
     return albums
-      .filter((a: any) => a?.name && a?.artist)
-      .map((a: any) => {
+      .filter((a: LastFmAlbum) => a?.name && a?.artist)
+      .map((a: LastFmAlbum) => {
         const images = Array.isArray(a.image) ? a.image : [];
-        const large = images.find((i: any) => i.size === "extralarge") || images[images.length - 1];
+        const large = images.find((i: LastFmImage) => i.size === "extralarge") || images[images.length - 1];
         const coverUrl = large?.["#text"] || "";
         return {
           type: "album",

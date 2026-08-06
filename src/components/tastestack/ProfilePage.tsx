@@ -15,8 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import CoverImage from "@/components/tastestack/CoverImage";
+import { motion, AnimatePresence } from "framer-motion";
 
 function parseExtra(extra: string) {
   try { return JSON.parse(extra) as { accent?: string; cover?: string; creator?: string }; } catch { return {}; }
@@ -27,22 +29,30 @@ function ItemCard({ item, isOwn, onEdit, progressLabel }: {
 }) {
   const extra = parseExtra(item.extra);
   return (
-    <div className="group relative">
+    <motion.div 
+      layoutId={`card-${item.id}`}
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ type: "spring", stiffness: 200, damping: 20, mass: 1 }}
+      whileHover={{ y: -4, transition: { type: "spring", stiffness: 300, damping: 15 } }}
+      className="group relative cursor-pointer"
+    >
       {isOwn && (
         <button onClick={() => onEdit(item)} className="absolute right-1 top-1 z-10 grid h-7 w-7 place-items-center rounded-full bg-black/80 text-white opacity-0 backdrop-blur transition group-hover:opacity-100 hover:text-primary">
           ✎
         </button>
       )}
-      <div className="relative aspect-[3/4] overflow-hidden rounded-lg border">
+      <div className="relative aspect-[3/4] overflow-hidden rounded-lg border shadow-sm transition-shadow group-hover:shadow-md">
         <CoverImage src={item.coverUrl} alt={item.title} icon={extra.cover || TYPE_ICONS[item.type as MediaType]} accent={extra.accent} fallbackClassName="p-3" sizes="(max-width: 640px) 33vw, 150px" />
       </div>
-      <p className="mt-1.5 truncate text-sm font-semibold">{item.title}</p>
+      <p className="mt-1.5 truncate text-sm font-semibold transition-colors group-hover:text-primary">{item.title}</p>
       <p className="text-xs text-muted-foreground">
         {STATUS_META[item.status as keyof typeof STATUS_META]?.shortLabel || item.status}
         {item.rating ? ` · ${item.rating}/10` : ""}
         {item.progressTotal ? ` · ${item.progressCurrent}/${item.progressTotal} ${progressLabel}` : ""}
       </p>
-    </div>
+    </motion.div>
   );
 }
 
@@ -53,9 +63,19 @@ function StatusSection({ title, items, isOwn, onEdit, progressLabel }: {
   return (
     <div className="mt-6">
       <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{title} ({items.length})</h3>
-      <div className="mt-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-        {items.map((item) => <ItemCard key={item.id} item={item} isOwn={isOwn} onEdit={onEdit} progressLabel={progressLabel} />)}
-      </div>
+      <motion.div 
+        className="mt-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3"
+        initial="hidden"
+        animate="visible"
+        variants={{
+          hidden: { opacity: 0 },
+          visible: { opacity: 1, transition: { staggerChildren: 0.05 } }
+        }}
+      >
+        <AnimatePresence mode="popLayout">
+          {items.map((item) => <ItemCard key={item.id} item={item} isOwn={isOwn} onEdit={onEdit} progressLabel={progressLabel} />)}
+        </AnimatePresence>
+      </motion.div>
     </div>
   );
 }
@@ -127,10 +147,16 @@ export default function ProfilePage({ username: routeUsername }: { username?: st
   };
 
   if (loading) return (
-    <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10 animate-pulse">
-      <div className="h-40 rounded-xl bg-muted" />
+    <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10">
+      <Skeleton className="h-40 w-full rounded-xl" />
       <div className="mt-8 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-        {Array.from({ length: 8 }).map((_, i) => <div key={i} className="aspect-[3/4] rounded-lg bg-muted" />)}
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="aspect-[3/4] w-full rounded-lg" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -185,12 +211,21 @@ export default function ProfilePage({ username: routeUsername }: { username?: st
 
       <main className="max-w-6xl mx-auto px-5 sm:px-8 py-9">
         {profile.totalItems === 0 ? (
-          <Card className="py-16 text-center">
-            <CardContent className="flex flex-col items-center">
-              <div className="text-4xl">✦</div>
-              <h2 className="mt-4 text-xl font-bold">This stack is just getting started.</h2>
-              <p className="mt-2 text-muted-foreground">Add titles from Discover to build your profile.</p>
-              {isOwn && <Button className="mt-6" onClick={() => router.push("/discover")}>Discover titles</Button>}
+          <Card className="overflow-hidden border-none shadow-sm bg-gradient-to-br from-muted/50 to-muted/10 relative">
+            <div className="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0))] dark:bg-grid-black/5" />
+            <CardContent className="flex flex-col items-center py-24 relative z-10 text-center">
+              <div className="grid h-20 w-20 place-items-center rounded-full bg-primary/10 text-primary mb-6">
+                <span className="text-4xl leading-none">✦</span>
+              </div>
+              <h2 className="text-2xl font-black tracking-tight text-foreground">This stack is just getting started.</h2>
+              <p className="mt-3 text-muted-foreground max-w-sm">
+                Add your favorite movies, anime, books, and games to start building your unique taste profile.
+              </p>
+              {isOwn && (
+                <Button className="mt-8 rounded-full px-8 shadow-md" size="lg" onClick={() => router.push("/discover")}>
+                  Discover titles
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -230,7 +265,11 @@ export default function ProfilePage({ username: routeUsername }: { username?: st
                     <StatusSection title="Plan to Watch/Play" items={itemsByStatus(config.type, "planned")} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(config.type)} />
                     <StatusSection title="On Hold" items={itemsByStatus(config.type, "onhold")} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(config.type)} />
                     <StatusSection title="Dropped" items={itemsByStatus(config.type, "dropped")} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(config.type)} />
-                    {!typeItems.length && <p className="text-muted-foreground text-sm mt-4">No items in this category yet.</p>}
+                    {!typeItems.length && (
+                      <div className="mt-8 rounded-lg border border-dashed p-8 text-center bg-muted/20">
+                        <p className="text-muted-foreground text-sm">No items in this category yet.</p>
+                      </div>
+                    )}
                   </TabsContent>
                 );
               })}

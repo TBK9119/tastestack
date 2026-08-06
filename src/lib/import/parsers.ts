@@ -31,7 +31,7 @@ const MAL_MANGA_STATUS: Record<string, ItemStatus> = {
 };
 
 export function parseMyAnimeListXml(xmlText: string): { anime: ParsedEntry[]; manga: ParsedEntry[] } {
-  let root: any;
+  let root: { anime?: unknown[]; manga?: unknown[] };
   try {
     root = new XMLParser().parse(xmlText)?.myanimelist;
   } catch {
@@ -39,8 +39,14 @@ export function parseMyAnimeListXml(xmlText: string): { anime: ParsedEntry[]; ma
   }
   if (!root) return { anime: [], manga: [] };
 
+  interface MALNode {
+    series_title?: string | number; my_status?: string | number; my_score?: string | number;
+    my_watched_episodes?: string | number; series_episodes?: string | number;
+    my_read_chapters?: string | number; series_chapters?: string | number;
+  }
+
   const anime = toArray(root.anime)
-    .map((a: any): ParsedEntry | null => {
+    .map((a: MALNode): ParsedEntry | null => {
       const title = String(a.series_title || "").trim();
       if (!title) return null;
       return {
@@ -54,7 +60,7 @@ export function parseMyAnimeListXml(xmlText: string): { anime: ParsedEntry[]; ma
     .filter((e: ParsedEntry | null): e is ParsedEntry => e !== null);
 
   const manga = toArray(root.manga)
-    .map((m: any): ParsedEntry | null => {
+    .map((m: MALNode): ParsedEntry | null => {
       const title = String(m.series_title || "").trim();
       if (!title) return null;
       return {

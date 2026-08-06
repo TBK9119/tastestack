@@ -33,7 +33,13 @@ export async function searchTMDB(
     const results = json?.results;
     if (!Array.isArray(results)) return [];
 
-    return results.map((r: any) => {
+    interface TMDBResult {
+      id: number; title?: string; name?: string;
+      release_date?: string; first_air_date?: string;
+      poster_path?: string; overview?: string;
+    }
+
+    return results.map((r: TMDBResult) => {
       const title = kind === "movie" ? r.title : r.name;
       const date = kind === "movie" ? r.release_date : r.first_air_date;
       return {

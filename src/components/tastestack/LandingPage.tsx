@@ -20,8 +20,8 @@ export default function LandingPage() {
       fetch("/api/trending?type=book&sort=trending").then((r) => r.json()).catch(() => ({ results: [] })),
     ]).then(([anime, manga, book]) => {
       const pool = [...(anime.results || []), ...(manga.results || []), ...(book.results || [])]
-        .filter((r: any) => r?.coverUrl)
-        .map((r: any) => r.coverUrl as string);
+        .filter((r: { coverUrl?: string }) => r?.coverUrl)
+        .map((r: { coverUrl: string }) => r.coverUrl);
       if (pool.length >= 6) setCovers(pool.slice(0, 8));
     }).catch(() => {});
   }, []);

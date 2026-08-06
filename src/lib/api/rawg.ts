@@ -29,10 +29,16 @@ export async function searchRAWG(query: string): Promise<NormalizedResult[]> {
     const results = json?.results;
     if (!Array.isArray(results)) return [];
 
-    return results.map((g: any) => {
+    interface RAWGResult {
+      id: number; name?: string; released?: string;
+      background_image?: string; playtime?: number;
+      platforms?: { platform?: { name?: string } }[];
+    }
+
+    return results.map((g: RAWGResult) => {
       const platforms = Array.isArray(g.platforms)
         ? g.platforms
-            .map((p: any) => p?.platform?.name)
+            .map((p) => p?.platform?.name)
             .filter(Boolean)
             .slice(0, 3)
             .join(", ")

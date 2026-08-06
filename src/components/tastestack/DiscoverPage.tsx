@@ -4,15 +4,17 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { CATALOG, catalogSourceForType } from "@/lib/catalog";
-import { MEDIA_TYPES, TYPE_ICONS, type MediaType, mediaConfig } from "@/lib/constants";
+import { TYPE_ICONS, type MediaType, mediaConfig } from "@/lib/constants";
 import type { NormalizedResult } from "@/lib/api/anilist";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Skeleton } from "@/components/ui/skeleton";
 import CoverImage from "@/components/tastestack/CoverImage";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles } from "lucide-react";
+import { Sparkles, SearchX } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 type Card = {
   key: string; type: MediaType; apiId: string; source?: string;
@@ -107,8 +109,8 @@ export default function DiscoverPage() {
       .then((r) => r.json())
       .then((data) => {
         if (!Array.isArray(data.items)) return;
-        setAddedKeys(new Set(data.items.map((it: any) => `${it.type}:${it.source}:${it.apiId}`)));
-        setFavoritedKeys(new Set(data.items.filter((it: any) => it.isFavorite).map((it: any) => `${it.type}:${it.source}:${it.apiId}`)));
+        setAddedKeys(new Set(data.items.map((it: { type: string; source: string; apiId: string }) => `${it.type}:${it.source}:${it.apiId}`)));
+        setFavoritedKeys(new Set(data.items.filter((it: { isFavorite: boolean }) => it.isFavorite).map((it: { type: string; source: string; apiId: string }) => `${it.type}:${it.source}:${it.apiId}`)));
       })
       .catch(() => {});
   }, [session]);
@@ -146,7 +148,7 @@ export default function DiscoverPage() {
     if (!session) { setLists([]); return; }
     fetch("/api/lists")
       .then((r) => r.json())
-      .then((data) => { if (Array.isArray(data.lists)) setLists(data.lists.map((l: any) => ({ id: l.id, name: l.name }))); })
+      .then((data) => { if (Array.isArray(data.lists)) setLists(data.lists.map((l: { id: string; name: string }) => ({ id: l.id, name: l.name }))); })
       .catch(() => {});
   }, [session]);
 
@@ -303,81 +305,115 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {!searching && cards.map((item) => (
-          <Card key={item.key} className="overflow-hidden">
-            <CardContent className="p-0">
-              <div className="flex p-4 gap-4">
-                <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg border">
-                  <CoverImage src={item.coverUrl} alt={item.title} icon={item.cover || TYPE_ICONS[item.type]} accent={item.accent} fallbackClassName="p-2" sizes="80px" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-primary">
-                    <span>{TYPE_ICONS[item.type]}</span>{item.type.toUpperCase()}
+      <motion.div 
+        className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+        initial="hidden"
+        animate="visible"
+        variants={{
+          hidden: { opacity: 0 },
+          visible: { opacity: 1, transition: { staggerChildren: 0.04 } }
+        }}
+      >
+        <AnimatePresence mode="popLayout">
+          {!searching && cards.map((item) => (
+            <motion.div
+              key={item.key}
+              layoutId={`discover-card-${item.key}`}
+              variants={{
+                hidden: { opacity: 0, scale: 0.95, y: 10 },
+                visible: { opacity: 1, scale: 1, y: 0, transition: { type: "spring", stiffness: 250, damping: 25 } }
+              }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              whileHover={{ y: -3, transition: { type: "spring", stiffness: 400, damping: 25 } }}
+            >
+              <Card className="overflow-hidden h-full">
+                <CardContent className="p-0 flex flex-col h-full">
+                  <div className="flex p-4 gap-4 flex-1">
+                    <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg border shadow-sm">
+                      <CoverImage src={item.coverUrl} alt={item.title} icon={item.cover || TYPE_ICONS[item.type]} accent={item.accent} fallbackClassName="p-2" sizes="80px" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+                        <span>{TYPE_ICONS[item.type]}</span>{item.type.toUpperCase()}
+                      </div>
+                      <h2 className="mt-1 font-bold leading-5 truncate">{item.title}</h2>
+                      <p className="mt-1 text-xs text-muted-foreground">{item.creator} · {item.year}</p>
+                      {item.description && <p className="mt-3 text-xs leading-5 text-muted-foreground line-clamp-2">{item.description}</p>}
+                    </div>
                   </div>
-                  <h2 className="mt-1 font-bold leading-5 truncate">{item.title}</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">{item.creator} · {item.year}</p>
-                  {item.description && <p className="mt-3 text-xs leading-5 text-muted-foreground line-clamp-2">{item.description}</p>}
-                </div>
-              </div>
-              <div className="border-t px-4 py-3 flex gap-2">
-                <Button variant="outline" size="sm" className="grow" disabled={adding === `${item.apiId}-false` || addedKeys.has(keyFor(item))} onClick={() => add(item)}>
-                  {adding === `${item.apiId}-false` ? "Adding…" : addedKeys.has(keyFor(item)) ? "✓ In your stack" : "+ Add to stack"}
-                </Button>
-                <Button variant="outline" size="sm" className={`px-3 text-yellow-500 hover:text-yellow-400 hover:border-yellow-500 ${favoritedKeys.has(keyFor(item)) ? "bg-yellow-50" : ""}`} disabled={adding === `${item.apiId}-true` || favoritedKeys.has(keyFor(item))} onClick={() => add(item, true)}>
-                  {adding === `${item.apiId}-true` ? "…" : favoritedKeys.has(keyFor(item)) ? "♥" : "♡"}
-                </Button>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="px-3" title="Add to a list">☰</Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64 p-2" align="end">
-                    <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">Add to a list</p>
-                    <div className="max-h-40 overflow-y-auto">
-                      {lists.length === 0 && <p className="px-2 py-1.5 text-xs text-muted-foreground">No lists yet — create one below.</p>}
-                      {lists.map((list) => (
-                        <button key={list.id} onClick={() => addToList(list.id, item)} className="block w-full truncate rounded px-2 py-1.5 text-left text-sm hover:bg-accent">
-                          {list.name}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="mt-2 flex gap-1.5 border-t pt-2">
-                      <Input value={newListName} onChange={(e) => setNewListName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); quickCreateList(item); } }} placeholder="New list name" className="h-8 text-xs" />
-                      <Button size="sm" className="h-8 shrink-0 px-2.5" onClick={() => quickCreateList(item)} disabled={!newListName.trim()}>Add</Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                  <div className="border-t bg-muted/20 px-4 py-3 flex gap-2">
+                    <Button variant="outline" size="sm" className="grow" disabled={adding === `${item.apiId}-false` || addedKeys.has(keyFor(item))} onClick={() => add(item)}>
+                      {adding === `${item.apiId}-false` ? "Adding…" : addedKeys.has(keyFor(item)) ? "✓ In stack" : "+ Add to stack"}
+                    </Button>
+                    <Button variant="outline" size="sm" className={`px-3 text-yellow-500 hover:text-yellow-400 hover:border-yellow-500 ${favoritedKeys.has(keyFor(item)) ? "bg-yellow-50" : ""}`} disabled={adding === `${item.apiId}-true` || favoritedKeys.has(keyFor(item))} onClick={() => add(item, true)}>
+                      {adding === `${item.apiId}-true` ? "…" : favoritedKeys.has(keyFor(item)) ? "♥" : "♡"}
+                    </Button>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="px-3" title="Add to a list">☰</Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64 p-2" align="end">
+                        <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">Add to a list</p>
+                        <div className="max-h-40 overflow-y-auto">
+                          {lists.length === 0 && <p className="px-2 py-1.5 text-xs text-muted-foreground">No lists yet — create one below.</p>}
+                          {lists.map((list) => (
+                            <button key={list.id} onClick={() => addToList(list.id, item)} className="block w-full truncate rounded px-2 py-1.5 text-left text-sm hover:bg-accent">
+                              {list.name}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="mt-2 flex gap-1.5 border-t pt-2">
+                          <Input value={newListName} onChange={(e) => setNewListName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); quickCreateList(item); } }} placeholder="New list name" className="h-8 text-xs" />
+                          <Button size="sm" className="h-8 shrink-0 px-2.5" onClick={() => quickCreateList(item)} disabled={!newListName.trim()}>Add</Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </motion.div>
 
       {searching && (
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <Card key={i} className="overflow-hidden">
               <CardContent className="p-0">
-                <div className="flex p-4 gap-4 animate-pulse">
-                  <div className="h-28 w-20 shrink-0 rounded-lg bg-muted" />
-                  <div className="min-w-0 flex-1 space-y-2.5 pt-1">
-                    <div className="h-3 w-14 rounded bg-muted" />
-                    <div className="h-4 w-3/4 rounded bg-muted" />
-                    <div className="h-3 w-1/2 rounded bg-muted" />
-                    <div className="h-3 w-full rounded bg-muted mt-2" />
-                    <div className="h-3 w-5/6 rounded bg-muted" />
+                <div className="flex p-4 gap-4">
+                  <Skeleton className="h-28 w-20 shrink-0 rounded-lg" />
+                  <div className="min-w-0 flex-1 space-y-3 pt-1">
+                    <Skeleton className="h-3 w-14 rounded" />
+                    <Skeleton className="h-5 w-3/4 rounded" />
+                    <Skeleton className="h-3 w-1/2 rounded" />
+                    <Skeleton className="h-3 w-full rounded mt-3" />
+                    <Skeleton className="h-3 w-5/6 rounded" />
                   </div>
                 </div>
-                <div className="border-t px-4 py-3 flex gap-2 animate-pulse">
-                  <div className="h-8 grow rounded bg-muted" />
-                  <div className="h-8 w-10 rounded bg-muted" />
+                <div className="border-t px-4 py-3 flex gap-2">
+                  <Skeleton className="h-9 grow rounded-md" />
+                  <Skeleton className="h-9 w-10 rounded-md" />
+                  <Skeleton className="h-9 w-10 rounded-md" />
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
-      {!searching && !cards.length && <Card className="mt-8 py-14 text-center text-muted-foreground"><CardContent>No titles found. Try a different search.</CardContent></Card>}
+      {!searching && !cards.length && (
+        <Card className="mt-8 overflow-hidden border-none shadow-sm bg-gradient-to-br from-muted/50 to-muted/10 relative">
+          <CardContent className="flex flex-col items-center py-20 text-center relative z-10">
+            <div className="grid h-16 w-16 place-items-center rounded-full bg-primary/10 text-primary mb-4">
+              <SearchX className="h-8 w-8" />
+            </div>
+            <h3 className="text-xl font-bold">No titles found</h3>
+            <p className="mt-2 text-muted-foreground text-sm max-w-sm">
+              We couldn't find any matches for "{query}". Try checking your spelling or using different keywords.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
