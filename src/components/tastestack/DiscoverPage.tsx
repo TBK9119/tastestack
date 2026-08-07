@@ -12,6 +12,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import CoverImage from "@/components/tastestack/CoverImage";
+import ItemDetailModal, { type ItemDetailProps } from "@/components/tastestack/ItemDetailModal";
+import EditItemModal from "@/components/tastestack/EditItemModal";
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, SearchX } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,6 +23,8 @@ type Card = {
   title: string; creator: string; year: string; progressTotal: number;
   description: string; cover?: string; accent?: string; coverUrl?: string;
 };
+
+import type { ItemData } from "@/store/app-store";
 
 interface RecItem {
   type: MediaType; apiId: string; source: string;
@@ -36,9 +40,9 @@ function recKey(r: { type: MediaType; source: string; apiId: string }) {
 // component identity is stable across re-renders — nesting it inside the
 // page component would remount this whole row (and re-flicker every cover
 // image) on every keystroke in the search box.
-function RecRow({ title, items, addedKeys, adding, onAdd }: {
+function RecRow({ title, items, addedKeys, adding, onAdd, openItemDetail }: {
   title: string; items: RecItem[]; addedKeys: Set<string>; adding: string | null;
-  onAdd: (r: RecItem) => void;
+  onAdd: (r: RecItem) => void; openItemDetail: (r: any) => void;
 }) {
   if (!items.length) return null;
   return (
@@ -50,11 +54,11 @@ function RecRow({ title, items, addedKeys, adding, onAdd }: {
           const already = addedKeys.has(key);
           const isAdding = adding === `${r.apiId}-false`;
           return (
-            <div key={key} className="group relative w-28 shrink-0">
+            <div key={key} className="group relative w-28 shrink-0 cursor-pointer" onClick={() => openItemDetail(r)}>
               <div className="relative aspect-[3/4] overflow-hidden rounded-lg border">
                 <CoverImage src={r.coverUrl} alt={r.title} icon={TYPE_ICONS[r.type]} sizes="112px" fallbackClassName="p-2" />
                 <button
-                  onClick={() => onAdd(r)}
+                  onClick={(e) => { e.stopPropagation(); onAdd(r); }}
                   disabled={already || isAdding}
                   title={already ? "In your stack" : "Add to stack"}
                   className={`absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full text-xs backdrop-blur transition ${already ? "bg-primary text-primary-foreground" : "bg-black/70 text-white opacity-0 group-hover:opacity-100"}`}
@@ -93,17 +97,17 @@ export default function DiscoverPage() {
   const [catalogCovers, setCatalogCovers] = useState<Record<string, string>>({});
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
   const [favoritedKeys, setFavoritedKeys] = useState<Set<string>>(new Set());
+  const [addedItems, setAddedItems] = useState<Record<string, ItemData>>({});
+  const [editItem, setEditItem] = useState<ItemData | null>(null);
   const [lists, setLists] = useState<{ id: string; name: string }[]>([]);
   const [newListName, setNewListName] = useState("");
   const [recs, setRecs] = useState<{ social: RecItem[]; community: RecItem[]; forYou: RecItem[] } | null>(null);
+  const [viewItem, setViewItem] = useState<ItemDetailProps | null>(null);
   const { toast } = useToast();
 
-  // A card's identity in the database is (type, source, apiId) — catalog
-  // cards don't carry a `source` field, so it's derived the same way the
-  // /api/items POST route derives it for catalog upserts.
   const keyFor = useCallback((card: Card) => `${card.type}:${card.source || catalogSourceForType(card.type)}:${card.apiId}`, []);
 
-  useEffect(() => {
+  const fetchItems = useCallback(() => {
     if (!session) { setAddedKeys(new Set()); setFavoritedKeys(new Set()); return; }
     fetch("/api/items")
       .then((r) => r.json())
@@ -111,9 +115,16 @@ export default function DiscoverPage() {
         if (!Array.isArray(data.items)) return;
         setAddedKeys(new Set(data.items.map((it: { type: string; source: string; apiId: string }) => `${it.type}:${it.source}:${it.apiId}`)));
         setFavoritedKeys(new Set(data.items.filter((it: { isFavorite: boolean }) => it.isFavorite).map((it: { type: string; source: string; apiId: string }) => `${it.type}:${it.source}:${it.apiId}`)));
+        const itemsMap: Record<string, ItemData> = {};
+        data.items.forEach((it: any) => itemsMap[`${it.type}:${it.source}:${it.apiId}`] = it);
+        setAddedItems(itemsMap);
       })
       .catch(() => {});
   }, [session]);
+
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
 
   useEffect(() => {
     fetch("/api/config")
@@ -122,12 +133,6 @@ export default function DiscoverPage() {
       .catch(() => {});
   }, []);
 
-  // The "All" tab's default (no-query) view falls back to the small curated
-  // CATALOG list, which only carries an icon glyph — no real cover art. For
-  // the three sources that don't need a paid key (anime/manga/book), fetch
-  // the real cover for each specific title once on mount so those cards
-  // look like the rest of the app instead of blank icon tiles. Movies, TV,
-  // games, and music stay icon tiles until their API keys are configured.
   useEffect(() => {
     const freeCatalogItems = CATALOG.filter((item) => item.type === "anime" || item.type === "manga" || item.type === "book");
     Promise.all(
@@ -190,9 +195,6 @@ export default function DiscoverPage() {
     [type, query, catalogCovers]
   );
 
-  // On the All tab, fill in titles the live search can't reach yet (movies,
-  // TV, games, and music without an API key configured) from the curated
-  // catalog, so a search still surfaces something for those categories.
   const catalogFallbackCards: Card[] = useMemo(() => {
     if (type !== "all" || !hasQuery) return [];
     return CATALOG.filter((item) => !liveTypes.includes(item.type) && `${item.title} ${item.creator}`.toLowerCase().includes(query.toLowerCase()))
@@ -208,12 +210,14 @@ export default function DiscoverPage() {
     if (!session) { router.push("/login"); return; }
     setAdding(`${card.apiId}-${favorite}`);
     const payload = card.source
-      ? { type: card.type, apiId: card.apiId, source: card.source, title: card.title, creator: card.creator, year: card.year, coverUrl: card.coverUrl, progressTotal: card.progressTotal, favorite }
-      : { apiId: card.apiId, favorite };
+      ? { type: card.type, apiId: card.apiId, source: card.source, title: card.title, creator: card.creator, year: card.year, coverUrl: card.coverUrl, progressTotal: card.progressTotal, favorite, status: "watching" }
+      : { apiId: card.apiId, favorite, coverUrl: card.coverUrl, status: "watching" };
     const res = await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     if (res.ok) {
+      const data = await res.json();
       const cardKey = keyFor(card);
       setAddedKeys((prev) => new Set(prev).add(cardKey));
+      if (data.item) setAddedItems((prev) => ({ ...prev, [cardKey]: data.item }));
       if (favorite) setFavoritedKeys((prev) => new Set(prev).add(cardKey));
       toast({ title: favorite ? "Saved as a favourite!" : "Added to your stack — set its status from your profile." });
     } else {
@@ -257,6 +261,14 @@ export default function DiscoverPage() {
     add({ key: recKey(r), type: r.type, apiId: r.apiId, source: r.source, title: r.title, creator: r.creator, year: r.year, progressTotal: 0, description: "", coverUrl: r.coverUrl });
   }, [add]);
 
+  const openItemDetail = (item: Card | RecItem) => {
+    setViewItem({
+      title: item.title, coverUrl: item.coverUrl ?? "", type: item.type, apiId: item.apiId, source: (item as Card).source ?? "", year: item.year,
+      creator: item.creator, description: (item as Card).description,
+      isAdded: addedKeys.has(`${item.type}:${(item as Card).source || catalogSourceForType(item.type)}:${item.apiId}`)
+    });
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10 sm:py-14">
       <div className="max-w-2xl">
@@ -271,9 +283,9 @@ export default function DiscoverPage() {
             <Sparkles className="h-4 w-4 text-primary" />
             <p className="text-xs font-bold tracking-[.18em] text-primary">RECOMMENDED FOR YOU</p>
           </div>
-          <RecRow title={recs.forYou[0]?.reason || "For you"} items={recs.forYou} addedKeys={addedKeys} adding={adding} onAdd={addRec} />
-          <RecRow title="Trending with people you follow" items={recs.social} addedKeys={addedKeys} adding={adding} onAdd={addRec} />
-          <RecRow title="Popular on TasteStack" items={recs.community} addedKeys={addedKeys} adding={adding} onAdd={addRec} />
+          <RecRow title={recs.forYou[0]?.reason || "For you"} items={recs.forYou} addedKeys={addedKeys} adding={adding} onAdd={addRec} openItemDetail={openItemDetail} />
+          <RecRow title="Trending with people you follow" items={recs.social} addedKeys={addedKeys} adding={adding} onAdd={addRec} openItemDetail={openItemDetail} />
+          <RecRow title="Popular on TasteStack" items={recs.community} addedKeys={addedKeys} adding={adding} onAdd={addRec} openItemDetail={openItemDetail} />
         </div>
       )}
 
@@ -325,6 +337,8 @@ export default function DiscoverPage() {
               }}
               exit={{ opacity: 0, scale: 0.9 }}
               whileHover={{ y: -3, transition: { type: "spring", stiffness: 400, damping: 25 } }}
+              onClick={() => openItemDetail(item)}
+              className="cursor-pointer"
             >
               <Card className="overflow-hidden h-full">
                 <CardContent className="p-0 flex flex-col h-full">
@@ -341,7 +355,7 @@ export default function DiscoverPage() {
                       {item.description && <p className="mt-3 text-xs leading-5 text-muted-foreground line-clamp-2">{item.description}</p>}
                     </div>
                   </div>
-                  <div className="border-t bg-muted/20 px-4 py-3 flex gap-2">
+                  <div className="border-t bg-muted/20 px-4 py-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
                     <Button variant="outline" size="sm" className="grow" disabled={adding === `${item.apiId}-false` || addedKeys.has(keyFor(item))} onClick={() => add(item)}>
                       {adding === `${item.apiId}-false` ? "Adding…" : addedKeys.has(keyFor(item)) ? "✓ In stack" : "+ Add to stack"}
                     </Button>
@@ -414,6 +428,26 @@ export default function DiscoverPage() {
           </CardContent>
         </Card>
       )}
+
+      <ItemDetailModal 
+        isOpen={!!viewItem} 
+        onClose={() => setViewItem(null)} 
+        item={viewItem} 
+        onTrack={(trackedItem) => add(trackedItem as any, false)}
+        onEdit={(trackedItem) => {
+          const key = `${trackedItem.type}:${trackedItem.source || catalogSourceForType(trackedItem.type)}:${trackedItem.apiId}`;
+          if (addedItems[key]) {
+            setEditItem(addedItems[key]);
+          }
+        }}
+      />
+      
+      <EditItemModal 
+        isOpen={!!editItem} 
+        onClose={() => setEditItem(null)} 
+        item={editItem} 
+        onSave={fetchItems}
+      />
     </div>
   );
 }

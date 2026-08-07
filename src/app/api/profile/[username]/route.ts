@@ -29,10 +29,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   for (const row of typeCounts) counts[row.type] = row._count;
   const favoritesCount = await db.item.count({ where: { userId: user.id, isFavorite: true } });
 
+  const ratingDistribution = await db.item.groupBy({ by: ["rating"], where: { userId: user.id, rating: { gt: 0 } }, _count: true });
+  const ratings: Record<number, number> = {};
+  for (let i = 1; i <= 10; i++) ratings[i] = 0; // Initialize 1-10
+  for (const row of ratingDistribution) ratings[row.rating] = row._count;
+
   return NextResponse.json({
     id: user.id, username: user.username, displayName: user.displayName, bio: user.bio,
     avatarUrl: user.avatarUrl, bannerColor: user.bannerColor, isPublic: user.isPublic,
-    isOwn, isFollowing, counts, totalItems: user._count.items,
+    isOwn, isFollowing, counts, ratings, totalItems: user._count.items,
     favoritesCount, followersCount: user._count.followers, followingCount: user._count.following,
   });
 }

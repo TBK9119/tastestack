@@ -1,4 +1,5 @@
 import Navbar from "@/components/tastestack/Navbar";
+import CommandPalette from "@/components/tastestack/CommandPalette";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -14,6 +15,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </footer>
+      <CommandPalette />
     </div>
   );
 }

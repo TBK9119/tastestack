@@ -72,9 +72,10 @@ export async function POST(request: NextRequest) {
   } else {
     const item = CATALOG.find((e) => e.apiId === body.apiId);
     if (!item) return NextResponse.json({ error: "Title not available." }, { status: 400 });
+    const coverUrl = typeof body.coverUrl === "string" && body.coverUrl.startsWith("https://") ? body.coverUrl.slice(0, 500) : "";
     record = {
       type: item.type, apiId: item.apiId, source: catalogSourceForType(item.type),
-      title: item.title, year: item.year, coverUrl: "",
+      title: item.title, year: item.year, coverUrl: coverUrl,
       extra: JSON.stringify({ creator: item.creator, accent: item.accent, cover: item.cover }),
       progressTotal: item.progressTotal || 0,
     };

@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import CoverImage from "@/components/tastestack/CoverImage";
+import ItemDetailModal, { type ItemDetailProps } from "@/components/tastestack/ItemDetailModal";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -96,18 +97,21 @@ interface SearchResult {
   type: MediaType; apiId: string; source: string; title: string; creator: string; year: string; coverUrl: string;
 }
 
-function SortableEntry({ entry, isOwn, onRemove }: { entry: ListEntryData; isOwn: boolean; onRemove: (id: string) => void }) {
+function SortableEntry({ entry, isOwn, onRemove, onClick }: { entry: ListEntryData; isOwn: boolean; onRemove: (id: string) => void; onClick: () => void; }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: entry.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
   const extra = parseExtra(entry.extra);
   return (
-    <div ref={setNodeRef} style={style} className="group relative">
+    <div ref={setNodeRef} style={style} className="group relative cursor-pointer" onClick={onClick}>
       {isOwn && (
         <button onClick={(e) => { e.stopPropagation(); onRemove(entry.id); }} className="absolute right-1 top-1 z-10 grid h-7 w-7 place-items-center rounded-full bg-black/80 text-white opacity-0 backdrop-blur transition group-hover:opacity-100 hover:text-destructive">
           ×
         </button>
       )}
-      <div {...attributes} {...listeners} className={`relative aspect-[3/4] overflow-hidden rounded-lg border ${isOwn ? "cursor-grab active:cursor-grabbing" : ""}`}>
+      <div {...attributes} {...listeners} onClick={(e) => {
+        // Prevent sorting drag from triggering click immediately if needed
+        // but simple click will bubble up to the parent div
+      }} className={`relative aspect-[3/4] overflow-hidden rounded-lg border ${isOwn ? "cursor-grab active:cursor-grabbing" : ""}`}>
         <CoverImage src={entry.coverUrl} alt={entry.title} icon={extra.cover || TYPE_ICONS[entry.type]} accent={extra.accent} fallbackClassName="p-3" sizes="(max-width: 640px) 33vw, 150px" />
       </div>
       <p className="mt-1.5 truncate text-sm font-semibold">{entry.title}</p>
@@ -133,6 +137,7 @@ export default function ListsPage() {
   const [addQuery, setAddQuery] = useState("");
   const [addResults, setAddResults] = useState<SearchResult[]>([]);
   const [addSearching, setAddSearching] = useState(false);
+  const [viewItem, setViewItem] = useState<ItemDetailProps | null>(null);
   const { toast } = useToast();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -256,6 +261,14 @@ export default function ListsPage() {
     fetch(`/api/lists/${openList.id}/entries`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: reordered.map((e) => e.id) }) });
   };
 
+  const openItemDetail = (entry: ListEntryData) => {
+    const extra = parseExtra(entry.extra);
+    setViewItem({
+      title: entry.title, coverUrl: entry.coverUrl, type: entry.type, apiId: entry.apiId, source: entry.source, year: entry.year,
+      creator: extra.creator, note: entry.note
+    } as ItemDetailProps); // Cast as note isn't in ItemDetailProps yet but won't hurt
+  };
+
   if (!session) return (
     <div className="max-w-lg mx-auto px-5 py-16 text-center">
       <h1 className="text-3xl font-black">Curate your own lists.</h1>
@@ -307,7 +320,7 @@ export default function ListsPage() {
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={openList.entries.map((e) => e.id)} strategy={rectSortingStrategy}>
               <div className="mt-8 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-                {openList.entries.map((entry) => <SortableEntry key={entry.id} entry={entry} isOwn={openList.isOwn} onRemove={removeEntry} />)}
+                {openList.entries.map((entry) => <SortableEntry key={entry.id} entry={entry} isOwn={openList.isOwn} onRemove={removeEntry} onClick={() => openItemDetail(entry)} />)}
               </div>
             </SortableContext>
           </DndContext>
@@ -362,6 +375,12 @@ export default function ListsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        
+        <ItemDetailModal 
+          isOpen={!!viewItem} 
+          onClose={() => setViewItem(null)} 
+          item={viewItem} 
+        />
       </div>
     );
   }

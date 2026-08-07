@@ -20,6 +20,10 @@ import { useToast } from "@/hooks/use-toast";
 import CoverImage from "@/components/tastestack/CoverImage";
 import { motion, AnimatePresence } from "framer-motion";
 
+import ItemDetailModal, { type ItemDetailProps } from "@/components/tastestack/ItemDetailModal";
+import EditItemModal from "@/components/tastestack/EditItemModal";
+import ProfileStats from "@/components/tastestack/ProfileStats";
+
 function parseExtra(extra: string) {
   try { return JSON.parse(extra) as { accent?: string; cover?: string; creator?: string }; } catch { return {}; }
 }
@@ -37,9 +41,14 @@ function ItemCard({ item, isOwn, onEdit, progressLabel }: {
       transition={{ type: "spring", stiffness: 200, damping: 20, mass: 1 }}
       whileHover={{ y: -4, transition: { type: "spring", stiffness: 300, damping: 15 } }}
       className="group relative cursor-pointer"
+      onClick={() => {
+        if (!isOwn) {
+          onEdit(item); // hack: we use onEdit for viewing when it's not own
+        }
+      }}
     >
       {isOwn && (
-        <button onClick={() => onEdit(item)} className="absolute right-1 top-1 z-10 grid h-7 w-7 place-items-center rounded-full bg-black/80 text-white opacity-0 backdrop-blur transition group-hover:opacity-100 hover:text-primary">
+        <button onClick={(e) => { e.stopPropagation(); onEdit(item); }} className="absolute right-1 top-1 z-10 grid h-7 w-7 place-items-center rounded-full bg-black/80 text-white opacity-0 backdrop-blur transition group-hover:opacity-100 hover:text-primary">
           ✎
         </button>
       )}
@@ -73,7 +82,11 @@ function StatusSection({ title, items, isOwn, onEdit, progressLabel }: {
         }}
       >
         <AnimatePresence mode="popLayout">
-          {items.map((item) => <ItemCard key={item.id} item={item} isOwn={isOwn} onEdit={onEdit} progressLabel={progressLabel} />)}
+          {items.map((item) => (
+            <div key={item.id} onClick={() => onEdit(item)}>
+              <ItemCard item={item} isOwn={isOwn} onEdit={onEdit} progressLabel={progressLabel} />
+            </div>
+          ))}
         </AnimatePresence>
       </motion.div>
     </div>
@@ -87,9 +100,9 @@ export default function ProfilePage({ username: routeUsername }: { username?: st
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [items, setItems] = useState<ItemData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedTab, setSelectedTab] = useState<string>("anime");
   const [editItem, setEditItem] = useState<ItemData | null>(null);
-  const [editForm, setEditForm] = useState({ status: "", rating: 0, progressCurrent: 0, progressTotal: 0, review: "", isFavorite: false });
-  const [saving, setSaving] = useState(false);
+  const [viewItem, setViewItem] = useState<ItemDetailProps | null>(null);
   const { toast } = useToast();
 
   const fetchProfile = useCallback(async () => {
@@ -113,26 +126,19 @@ export default function ProfilePage({ username: routeUsername }: { username?: st
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
 
   const openEdit = (item: ItemData) => {
-    setEditItem(item);
-    setEditForm({ status: item.status, rating: item.rating, progressCurrent: item.progressCurrent, progressTotal: item.progressTotal, review: item.review, isFavorite: item.isFavorite });
+    if (isOwn) {
+      setEditItem(item);
+    } else {
+      const extra = parseExtra(item.extra);
+      setViewItem({
+        title: item.title, coverUrl: item.coverUrl, type: item.type, apiId: item.apiId, source: item.source, year: item.year,
+        creator: extra.creator, rating: item.rating, progressCurrent: item.progressCurrent, progressTotal: item.progressTotal,
+        review: item.review, status: item.status, isFavorite: item.isFavorite
+      });
+    }
   };
 
-  const saveEdit = async () => {
-    if (!editItem) return;
-    setSaving(true);
-    const res = await fetch(`/api/items/${editItem.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editForm) });
-    setSaving(false);
-    if (res.ok) { toast({ title: "Saved!" }); setEditItem(null); fetchProfile(); }
-    else { const d = await res.json().catch(() => ({})); toast({ title: "Error", description: d.error, variant: "destructive" }); }
-  };
 
-  const removeItem = async () => {
-    if (!editItem) return;
-    setSaving(true);
-    const res = await fetch(`/api/items/${editItem.id}`, { method: "DELETE" });
-    setSaving(false);
-    if (res.ok) { toast({ title: "Removed from stack" }); setEditItem(null); fetchProfile(); }
-  };
 
   const follow = async () => {
     if (!profile) return;
@@ -164,10 +170,12 @@ export default function ProfilePage({ username: routeUsername }: { username?: st
 
   const isOwn = profile.isOwn || profile.username === user?.username;
   const progressLabel = (type: MediaType) => mediaConfig(type).progressLabel;
-
-  const itemsByType = (type: MediaType) => items.filter((i) => i.type === type);
-  const itemsByStatus = (type: MediaType, status: string) => itemsByType(type).filter((i) => i.status === status);
+  const filteredItems = items.filter((i) => i.type === selectedTab);
+  const statsTabActive = selectedTab === "stats";
+  const itemsByStatus = (type: MediaType, status: string) => items.filter((i) => i.type === type && i.status === status);
   const favoritesByType = (type: MediaType) => items.filter((i) => i.type === type && i.isFavorite);
+
+  const tabs = MEDIA_TYPES.filter(m => (profile.counts[m.type] || 0) > 0).map(m => ({ id: m.type, label: m.label, count: profile.counts[m.type] || 0 }));
 
   return (
     <div>
@@ -200,125 +208,65 @@ export default function ProfilePage({ username: routeUsername }: { username?: st
               {profile.bio && <p className="mt-3 max-w-xl text-sm">{profile.bio}</p>}
             </div>
           </div>
-          <div className="mt-8 flex flex-wrap gap-x-7 gap-y-2 text-sm">
-            <span><b>{profile.totalItems}</b> tracked</span>
-            <span><b>{profile.favoritesCount}</b> favourites</span>
-            <span><b>{profile.followersCount}</b> followers</span>
-            <span><b>{profile.followingCount}</b> following</span>
+          <div className="mt-8 flex gap-6 border-b overflow-x-auto no-scrollbar">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setSelectedTab(tab.id)}
+                className={`pb-3 font-semibold whitespace-nowrap transition-colors ${selectedTab === tab.id ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {tab.label} <span className="ml-1 text-xs opacity-60">({tab.count})</span>
+              </button>
+            ))}
+            <button
+              onClick={() => setSelectedTab("stats")}
+              className={`pb-3 font-semibold whitespace-nowrap transition-colors ${selectedTab === "stats" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Stats <span className="ml-1 text-xs opacity-60">✦</span>
+            </button>
           </div>
         </div>
       </section>
 
       <main className="max-w-6xl mx-auto px-5 sm:px-8 py-9">
-        {profile.totalItems === 0 ? (
-          <Card className="overflow-hidden border-none shadow-sm bg-gradient-to-br from-muted/50 to-muted/10 relative">
-            <div className="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0))] dark:bg-grid-black/5" />
-            <CardContent className="flex flex-col items-center py-24 relative z-10 text-center">
-              <div className="grid h-20 w-20 place-items-center rounded-full bg-primary/10 text-primary mb-6">
-                <span className="text-4xl leading-none">✦</span>
-              </div>
-              <h2 className="text-2xl font-black tracking-tight text-foreground">This stack is just getting started.</h2>
-              <p className="mt-3 text-muted-foreground max-w-sm">
-                Add your favorite movies, anime, books, and games to start building your unique taste profile.
-              </p>
+        {statsTabActive ? (
+          <ProfileStats profile={profile} />
+        ) : filteredItems.length === 0 ? (
+          <Card className="py-16 text-center shadow-sm">
+            <CardContent className="flex flex-col items-center">
+              <div className="text-4xl text-muted-foreground/30">{TYPE_ICONS[selectedTab as MediaType]}</div>
+              <h2 className="mt-4 text-xl font-bold">No {selectedTab} titles yet.</h2>
               {isOwn && (
-                <Button className="mt-8 rounded-full px-8 shadow-md" size="lg" onClick={() => router.push("/discover")}>
-                  Discover titles
-                </Button>
+                <Button className="mt-6 font-bold shadow-md" onClick={() => router.push("/discover")}>Find something to add</Button>
               )}
             </CardContent>
           </Card>
         ) : (
-          <>
-            {/* Stats bar */}
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-              {MEDIA_TYPES.map((config) => (
-                <Card key={config.type} className="p-3 text-center">
-                  <CardContent className="p-0">
-                    <p className="text-xl text-primary">{TYPE_ICONS[config.type]}</p>
-                    <p className="mt-2 text-xl font-black">{profile.counts[config.type] || 0}</p>
-                    <p className="text-xs text-muted-foreground">{config.label}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            {/* Tabs per media type */}
-            <Tabs defaultValue={MEDIA_TYPES.find((c) => (profile.counts[c.type] || 0) > 0)?.type || "anime"} className="mt-10">
-              <TabsList className="flex-wrap h-auto gap-1">
-                {MEDIA_TYPES.map((config) => (profile.counts[config.type] || 0) > 0 && (
-                  <TabsTrigger key={config.type} value={config.type} className="gap-1.5">
-                    <span>{TYPE_ICONS[config.type]}</span>{config.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-              {MEDIA_TYPES.map((config) => {
-                const typeItems = itemsByType(config.type);
-                if (!typeItems.length && (profile.counts[config.type] || 0) === 0) return null;
-                return (
-                  <TabsContent key={config.type} value={config.type} className="mt-6">
-                    {favoritesByType(config.type).length > 0 && (
-                      <StatusSection title="♥ Favorites" items={favoritesByType(config.type)} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(config.type)} />
-                    )}
-                    <StatusSection title="Currently Watching/Playing" items={itemsByStatus(config.type, "watching")} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(config.type)} />
-                    <StatusSection title="Completed" items={itemsByStatus(config.type, "completed")} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(config.type)} />
-                    <StatusSection title="Plan to Watch/Play" items={itemsByStatus(config.type, "planned")} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(config.type)} />
-                    <StatusSection title="On Hold" items={itemsByStatus(config.type, "onhold")} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(config.type)} />
-                    <StatusSection title="Dropped" items={itemsByStatus(config.type, "dropped")} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(config.type)} />
-                    {!typeItems.length && (
-                      <div className="mt-8 rounded-lg border border-dashed p-8 text-center bg-muted/20">
-                        <p className="text-muted-foreground text-sm">No items in this category yet.</p>
-                      </div>
-                    )}
-                  </TabsContent>
-                );
-              })}
-            </Tabs>
-          </>
+          <div className="space-y-12">
+            {favoritesByType(selectedTab as MediaType).length > 0 && (
+              <StatusSection title="♥ Favorites" items={favoritesByType(selectedTab as MediaType)} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(selectedTab as MediaType)} />
+            )}
+            <StatusSection title="Currently Watching/Playing" items={itemsByStatus(selectedTab as MediaType, "watching")} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(selectedTab as MediaType)} />
+            <StatusSection title="Completed" items={itemsByStatus(selectedTab as MediaType, "completed")} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(selectedTab as MediaType)} />
+            <StatusSection title="Plan to Watch/Play" items={itemsByStatus(selectedTab as MediaType, "planned")} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(selectedTab as MediaType)} />
+            <StatusSection title="On Hold" items={itemsByStatus(selectedTab as MediaType, "onhold")} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(selectedTab as MediaType)} />
+            <StatusSection title="Dropped" items={itemsByStatus(selectedTab as MediaType, "dropped")} isOwn={isOwn} onEdit={openEdit} progressLabel={progressLabel(selectedTab as MediaType)} />
+          </div>
         )}
       </main>
 
-      {/* Edit Item Dialog */}
-      <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{editItem?.title}</DialogTitle>
-            <DialogDescription>Edit status, rating, progress, and review.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Status</Label>
-              <select className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
-                {Object.entries(STATUS_META).map(([val, meta]) => <option key={val} value={val}>{meta.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <Label>Rating {editForm.rating ? `— ${editForm.rating}/10` : "— unrated"}</Label>
-              <Slider className="mt-2" min={0} max={10} step={1} value={[editForm.rating]} onValueChange={([v]) => setEditForm({ ...editForm, rating: v })} />
-            </div>
-            {progressLabel(editItem?.type as MediaType) && (
-              <div className="flex items-end gap-2">
-                <div><Label>Progress</Label><Input type="number" min={0} className="mt-1 w-24" value={editForm.progressCurrent} onChange={(e) => setEditForm({ ...editForm, progressCurrent: Number(e.target.value) })} /></div>
-                <span className="pb-2">/</span>
-                <div><Label>Total</Label><Input type="number" min={0} className="mt-1 w-24" value={editForm.progressTotal} onChange={(e) => setEditForm({ ...editForm, progressTotal: Number(e.target.value) })} /></div>
-              </div>
-            )}
-            <div>
-              <Label>Review ({editForm.review.length}/500)</Label>
-              <Textarea className="mt-1 min-h-20" maxLength={500} value={editForm.review} onChange={(e) => setEditForm({ ...editForm, review: e.target.value })} placeholder="What did you think?" />
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox checked={editForm.isFavorite} onCheckedChange={(c) => setEditForm({ ...editForm, isFavorite: !!c })} />
-              <Label>Favourite</Label>
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="destructive" onClick={removeItem} disabled={saving}>Remove</Button>
-            <Button variant="outline" onClick={() => setEditItem(null)}>Cancel</Button>
-            <Button onClick={saveEdit} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EditItemModal 
+        isOpen={!!editItem} 
+        onClose={() => setEditItem(null)} 
+        item={editItem} 
+        onSave={fetchProfile}
+      />
+      
+      <ItemDetailModal 
+        isOpen={!!viewItem} 
+        onClose={() => setViewItem(null)} 
+        item={viewItem} 
+      />
     </div>
   );
 }

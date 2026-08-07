@@ -21,6 +21,7 @@ export interface ProfileData {
   isOwn: boolean;
   isFollowing: boolean;
   counts: Record<string, number>;
+  ratings: Record<number, number>;
   totalItems: number;
   favoritesCount: number;
   followersCount: number;
