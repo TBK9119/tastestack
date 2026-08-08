@@ -2,7 +2,7 @@ import type { NormalizedResult } from "./anilist";
 
 const SEARCH_ENDPOINT = "https://openlibrary.org/search.json";
 
-export async function searchOpenLibrary(query: string): Promise<NormalizedResult[]> {
+export async function searchOpenLibrary(query: string, page = 1): Promise<NormalizedResult[]> {
   if (!query.trim()) return [];
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
@@ -10,6 +10,7 @@ export async function searchOpenLibrary(query: string): Promise<NormalizedResult
     const url = new URL(SEARCH_ENDPOINT);
     url.searchParams.set("q", query);
     url.searchParams.set("limit", "20");
+    url.searchParams.set("page", String(page));
     url.searchParams.set("fields", "key,title,author_name,first_publish_year,cover_i,number_of_pages_median");
     const res = await fetch(url.toString(), { signal: controller.signal, headers: { Accept: "application/json" } });
     if (!res.ok) return [];
@@ -48,11 +49,11 @@ export async function searchOpenLibrary(query: string): Promise<NormalizedResult
 // AniList trending browse already used for Anime/Manga.
 export type OpenLibraryTrendingPeriod = "daily" | "weekly" | "monthly" | "yearly" | "forever";
 
-export async function fetchTrendingOpenLibrary(period: OpenLibraryTrendingPeriod = "weekly", limit = 12): Promise<NormalizedResult[]> {
+export async function fetchTrendingOpenLibrary(period: OpenLibraryTrendingPeriod = "weekly", limit = 12, page = 1): Promise<NormalizedResult[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const url = `https://openlibrary.org/trending/${period}.json?limit=${limit}`;
+    const url = `https://openlibrary.org/trending/${period}.json?limit=${limit}&page=${page}`;
     const res = await fetch(url, { signal: controller.signal, headers: { Accept: "application/json" } });
     if (!res.ok) return [];
     const json = await res.json();

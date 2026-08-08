@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { CATALOG, catalogSourceForType } from "@/lib/catalog";
@@ -92,6 +92,8 @@ export default function DiscoverPage() {
   const [sort, setSort] = useState("trending");
   const [adding, setAdding] = useState<string | null>(null);
   const [liveResults, setLiveResults] = useState<NormalizedResult[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [searching, setSearching] = useState(false);
   const [liveTypes, setLiveTypes] = useState<string[]>(["anime", "manga", "book"]);
   const [catalogCovers, setCatalogCovers] = useState<Record<string, string>>({});
@@ -170,24 +172,54 @@ export default function DiscoverPage() {
   const showTrendingSort = TRENDING_TYPES.includes(type) && !hasQuery;
   const useLive = (isLiveTab && (hasQuery || TRENDING_TYPES.includes(type))) || (type === "all" && hasQuery);
 
+  // Reset page on search/filter changes
+  useEffect(() => {
+    setPage(1);
+    setHasMore(true);
+  }, [type, query, sort]);
+
   useEffect(() => {
     if (!useLive) { setLiveResults([]); setSearching(false); return; }
-    setSearching(true);
+    if (page === 1) setSearching(true);
     const handle = setTimeout(async () => {
       try {
         const url = type === "all"
-          ? `/api/search?type=all&q=${encodeURIComponent(query)}`
+          ? `/api/search?type=all&q=${encodeURIComponent(query)}&page=${page}`
           : hasQuery
-            ? `/api/search?type=${type}&q=${encodeURIComponent(query)}`
-            : `/api/trending?type=${type}&sort=${sort}`;
+            ? `/api/search?type=${type}&q=${encodeURIComponent(query)}&page=${page}`
+            : `/api/trending?type=${type}&sort=${sort}&page=${page}`;
         const res = await fetch(url);
         const data = await res.json();
-        setLiveResults(Array.isArray(data.results) ? data.results : []);
-      } catch { setLiveResults([]); }
+        const results = Array.isArray(data.results) ? data.results : [];
+        
+        setHasMore(results.length > 0);
+        setLiveResults((prev) => {
+          if (page === 1) return results;
+          const seen = new Set(prev.map(r => r.apiId));
+          return [...prev, ...results.filter(r => !seen.has(r.apiId))];
+        });
+      } catch { 
+        if (page === 1) setLiveResults([]); 
+        setHasMore(false);
+      }
       finally { setSearching(false); }
-    }, hasQuery ? 400 : 0);
+    }, hasQuery && page === 1 ? 400 : 0);
     return () => clearTimeout(handle);
-  }, [type, query, useLive, hasQuery, sort]);
+  }, [type, query, useLive, hasQuery, sort, page]);
+
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const lastElementRef = useCallback((node: HTMLDivElement | null) => {
+    if (searching) return;
+    if (observerRef.current) observerRef.current.disconnect();
+    
+    observerRef.current = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && hasMore) {
+        setPage(p => p + 1);
+      }
+    });
+    
+    if (node) observerRef.current.observe(node);
+  }, [searching, hasMore]);
 
   const catalogCards: Card[] = useMemo(
     () => CATALOG.filter((item) => (type === "all" || item.type === type) && `${item.title} ${item.creator}`.toLowerCase().includes(query.toLowerCase()))
@@ -389,6 +421,12 @@ export default function DiscoverPage() {
           ))}
         </AnimatePresence>
       </motion.div>
+
+      {!searching && useLive && hasMore && liveResults.length > 0 && (
+        <div ref={lastElementRef} className="h-10 mt-4 flex items-center justify-center text-muted-foreground text-sm font-medium">
+          <Sparkles className="h-4 w-4 mr-2 animate-pulse text-primary" /> Loading more...
+        </div>
+      )}
 
       {searching && (
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

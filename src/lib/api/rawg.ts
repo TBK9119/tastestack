@@ -5,7 +5,7 @@ import type { NormalizedResult } from "./anilist";
 
 const SEARCH_ENDPOINT = "https://api.rawg.io/api/games";
 
-export async function searchRAWG(query: string): Promise<NormalizedResult[]> {
+export async function searchRAWG(query: string, page: number = 1): Promise<NormalizedResult[]> {
   const apiKey = process.env.RAWG_API_KEY;
   if (!apiKey || !query.trim()) return [];
 
@@ -17,6 +17,7 @@ export async function searchRAWG(query: string): Promise<NormalizedResult[]> {
     url.searchParams.set("key", apiKey);
     url.searchParams.set("search", query);
     url.searchParams.set("page_size", "20");
+    url.searchParams.set("page", String(page));
 
     const res = await fetch(url.toString(), {
       signal: controller.signal,

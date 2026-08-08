@@ -23,13 +23,14 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type");
   const sortParam = searchParams.get("sort") || "trending";
   const sort = SORT_MAP[sortParam] || "TRENDING_DESC";
+  const page = parseInt(searchParams.get("page") || "1", 10);
 
   switch (type) {
     case "anime":
     case "manga":
-      return NextResponse.json({ results: await fetchTrendingAniList(type, sort) });
+      return NextResponse.json({ results: await fetchTrendingAniList(type, sort, page) });
     case "book":
-      return NextResponse.json({ results: await fetchTrendingOpenLibrary(BOOK_PERIOD_MAP[sortParam] || "weekly") });
+      return NextResponse.json({ results: await fetchTrendingOpenLibrary(BOOK_PERIOD_MAP[sortParam] || "weekly", 12, page) });
     default:
       return NextResponse.json({ results: [] });
   }

@@ -5,15 +5,15 @@ import { searchTMDB } from "@/lib/api/tmdb";
 import { searchRAWG } from "@/lib/api/rawg";
 import { searchLastFm } from "@/lib/api/lastfm";
 
-async function searchAll(q: string): Promise<NormalizedResult[]> {
+async function searchAll(q: string, page: number = 1): Promise<NormalizedResult[]> {
   const settled = await Promise.allSettled([
-    searchAniList(q, "anime"),
-    searchAniList(q, "manga"),
-    searchOpenLibrary(q),
-    searchTMDB(q, "movie"),
-    searchTMDB(q, "tv"),
-    searchRAWG(q),
-    searchLastFm(q),
+    searchAniList(q, "anime", page),
+    searchAniList(q, "manga", page),
+    searchOpenLibrary(q, page),
+    searchTMDB(q, "movie", page),
+    searchTMDB(q, "tv", page),
+    searchRAWG(q, page),
+    searchLastFm(q, page),
   ]);
   const merged = settled.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 
@@ -33,23 +33,24 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type");
   const q = (searchParams.get("q") || "").trim();
+  const page = parseInt(searchParams.get("page") || "1", 10);
   if (!q) return NextResponse.json({ results: [] });
 
   switch (type) {
     case "anime":
     case "manga":
-      return NextResponse.json({ results: await searchAniList(q, type) });
+      return NextResponse.json({ results: await searchAniList(q, type, page) });
     case "book":
-      return NextResponse.json({ results: await searchOpenLibrary(q) });
+      return NextResponse.json({ results: await searchOpenLibrary(q, page) });
     case "movie":
     case "tv":
       return NextResponse.json({ results: await searchTMDB(q, type) });
     case "game":
-      return NextResponse.json({ results: await searchRAWG(q) });
+      return NextResponse.json({ results: await searchRAWG(q, page) });
     case "album":
-      return NextResponse.json({ results: await searchLastFm(q) });
+      return NextResponse.json({ results: await searchLastFm(q, page) });
     case "all":
-      return NextResponse.json({ results: await searchAll(q) });
+      return NextResponse.json({ results: await searchAll(q, page) });
     default:
       return NextResponse.json({ results: [] });
   }

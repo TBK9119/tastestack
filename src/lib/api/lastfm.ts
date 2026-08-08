@@ -5,7 +5,7 @@ import type { NormalizedResult } from "./anilist";
 
 const ENDPOINT = "https://ws.audioscrobbler.com/2.0/";
 
-export async function searchLastFm(query: string): Promise<NormalizedResult[]> {
+export async function searchLastFm(query: string, page: number = 1): Promise<NormalizedResult[]> {
   const apiKey = process.env.LASTFM_API_KEY;
   if (!apiKey || !query.trim()) return [];
 
@@ -19,6 +19,7 @@ export async function searchLastFm(query: string): Promise<NormalizedResult[]> {
     url.searchParams.set("api_key", apiKey);
     url.searchParams.set("format", "json");
     url.searchParams.set("limit", "20");
+    url.searchParams.set("page", String(page));
 
     const res = await fetch(url.toString(), {
       signal: controller.signal,

@@ -17,8 +17,8 @@ export type AniListSort = "TRENDING_DESC" | "POPULARITY_DESC" | "SCORE_DESC";
 const ANILIST_ENDPOINT = "https://graphql.anilist.co";
 
 const QUERY = `
-query ($search: String, $type: MediaType, $perPage: Int) {
-  Page(page: 1, perPage: $perPage) {
+query ($search: String, $type: MediaType, $perPage: Int, $page: Int = 1) {
+  Page(page: $page, perPage: $perPage) {
     media(search: $search, type: $type, sort: SEARCH_MATCH) {
       id
       title { romaji english }
@@ -34,8 +34,8 @@ query ($search: String, $type: MediaType, $perPage: Int) {
 }`;
 
 const SORTED_QUERY = `
-query ($type: MediaType, $perPage: Int, $sort: [MediaSort]) {
-  Page(page: 1, perPage: $perPage) {
+query ($type: MediaType, $perPage: Int, $sort: [MediaSort], $page: Int = 1) {
+  Page(page: $page, perPage: $perPage) {
     media(type: $type, sort: $sort) {
       id
       title { romaji english }
@@ -68,14 +68,14 @@ function mapMedia(m: Record<string, any>, kind: "anime" | "manga"): NormalizedRe
   };
 }
 
-async function fetchSortedAniList(kind: "anime" | "manga", sort: AniListSort, perPage: number): Promise<NormalizedResult[]> {
+async function fetchSortedAniList(kind: "anime" | "manga", sort: AniListSort, perPage: number, page: number = 1): Promise<NormalizedResult[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
     const res = await fetch(ANILIST_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ query: SORTED_QUERY, variables: { type: kind.toUpperCase(), perPage, sort: [sort] } }),
+      body: JSON.stringify({ query: SORTED_QUERY, variables: { type: kind.toUpperCase(), perPage, page, sort: [sort] } }),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -100,11 +100,11 @@ async function fetchSortedAniList(kind: "anime" | "manga", sort: AniListSort, pe
   }
 }
 
-export async function fetchTrendingAniList(kind: "anime" | "manga", sort: AniListSort = "TRENDING_DESC"): Promise<NormalizedResult[]> {
-  return fetchSortedAniList(kind, sort, 12);
+export async function fetchTrendingAniList(kind: "anime" | "manga", sort: AniListSort = "TRENDING_DESC", page: number = 1): Promise<NormalizedResult[]> {
+  return fetchSortedAniList(kind, sort, 12, page);
 }
 
-export async function searchAniList(query: string, kind: "anime" | "manga"): Promise<NormalizedResult[]> {
+export async function searchAniList(query: string, kind: "anime" | "manga", page: number = 1): Promise<NormalizedResult[]> {
   const q = query.trim();
   if (!q) return [];
   const controller = new AbortController();
@@ -114,7 +114,7 @@ export async function searchAniList(query: string, kind: "anime" | "manga"): Pro
     const res = await fetch(ANILIST_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ query: QUERY, variables: { search: q, type: kind.toUpperCase(), perPage: 30 } }),
+      body: JSON.stringify({ query: QUERY, variables: { search: q, type: kind.toUpperCase(), perPage: 30, page } }),
       signal: controller.signal,
     });
     if (res.ok) {

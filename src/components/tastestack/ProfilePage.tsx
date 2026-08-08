@@ -35,12 +35,10 @@ function ItemCard({ item, isOwn, onEdit, progressLabel }: {
   return (
     <motion.div 
       layoutId={`card-${item.id}`}
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
       transition={{ type: "spring", stiffness: 200, damping: 20, mass: 1 }}
       whileHover={{ y: -4, transition: { type: "spring", stiffness: 300, damping: 15 } }}
-      className="group relative cursor-pointer"
+      className="animate-on-scroll group relative cursor-pointer"
       onClick={() => {
         if (!isOwn) {
           onEdit(item); // hack: we use onEdit for viewing when it's not own

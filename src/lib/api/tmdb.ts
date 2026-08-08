@@ -8,7 +8,8 @@ const IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
 
 export async function searchTMDB(
   query: string,
-  kind: "movie" | "tv"
+  kind: "movie" | "tv",
+  page: number = 1
 ): Promise<NormalizedResult[]> {
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey || !query.trim()) return [];
@@ -21,6 +22,7 @@ export async function searchTMDB(
     url.searchParams.set("api_key", apiKey);
     url.searchParams.set("query", query);
     url.searchParams.set("include_adult", "false");
+    url.searchParams.set("page", String(page));
 
     const res = await fetch(url.toString(), {
       signal: controller.signal,
