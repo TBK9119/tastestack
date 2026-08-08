@@ -45,7 +45,7 @@ export function parseMyAnimeListXml(xmlText: string): { anime: ParsedEntry[]; ma
     my_read_chapters?: string | number; series_chapters?: string | number;
   }
 
-  const anime = toArray(root.anime)
+  const anime = (toArray(root.anime) as MALNode[])
     .map((a: MALNode): ParsedEntry | null => {
       const title = String(a.series_title || "").trim();
       if (!title) return null;
@@ -59,7 +59,7 @@ export function parseMyAnimeListXml(xmlText: string): { anime: ParsedEntry[]; ma
     })
     .filter((e: ParsedEntry | null): e is ParsedEntry => e !== null);
 
-  const manga = toArray(root.manga)
+  const manga = (toArray(root.manga) as MALNode[])
     .map((m: MALNode): ParsedEntry | null => {
       const title = String(m.series_title || "").trim();
       if (!title) return null;
